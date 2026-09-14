@@ -1,5 +1,16 @@
 # Confession Booth — Contribution Guide
 
+## Setup
+
+```bash
+npm install
+npx husky init   # pasang git hooks sekali saja (lint-staged saat commit)
+```
+
+> `prepare` sengaja TIDAK ada di `package.json`: hook husky hanya untuk
+> mesin kontributor. Lifecycle `prepare` jalan di semua environment (termasuk
+> Vercel/Docker tanpa devDeps) dan memecahkan build deploy (T1G).
+
 ## Principles
 
 - privacy first;
