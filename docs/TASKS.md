@@ -1,6 +1,6 @@
 # Confession Booth — Task Plan
 
-**Status:** Draft v1.2 (1D+1E+1F+1.5 selesai 2026-09-15; sisa: Sepolia deploy, ZAP/Lighthouse staging)
+**Status:** Draft v1.3 (1D+1E+1F+1.5 selesai 2026-09-15; gate staging 1G berjalan — repo git ✅, deploy/scan menunggu akun [kamu])
 **Sumber kebenaran:** `docs/PRD.md`, `ARCHITECTURE.md`, `API.md`, `SCHEMA.md`, `SMART_CONTRACT.md`, `SECURITY.md`, `PRIVACY.md`, `MODERATION.md`, `ENVIRONMENT.md`, `TESTING.md`, `ROADMAP.md`, `PRODUCT_COPY.md`
 **Prinsip pengikat:** identitas opsional; tanpa alamat wallet di UI publik; tanpa plaintext di on-chain; moderasi di application layer; klaim privasi jujur.
 
@@ -344,6 +344,22 @@ shared 18/18, API 61/61, E2E 5/5, `npm audit --omit=dev` 0).
 - [x] **T1H-005** Anti-spam v2: PoW eskalasi (`pow.ts` HMAC-stateless, expiry 10 mnt, `POW_DIFFICULTY` default 14) — skor ≥50 (velocity + report 24 jam) → `429 POW_REQUIRED` + challenge → composer jawab otomatis sekali; `worker:abuse` tiap 5 mnt (rescore + auto-quarantine ≥3 kritis, tak sentuh HIDDEN/REMOVED); CAPTCHA provider stub jujur (pakai PoW sampai ada kunci).
 - [x] **T1H-006** Observability penuh: `trace.ts` JSON trace_id/op/latency (tanpa PII, OTel-ready), latensi read di metrics (p50/p95), `GET /api/slo` (99.5% + p95<500ms, window lifetime proses), `db:backup:verify` TERUJI lokal (`size=86592B tables=16`), `docs/SECURITY_REVIEW_1H.md`, CI +playwright/e2e/audit.
 - [x] **T1H-007** Dokumentasi operasional: `docs/OPERATIONS.md` (indexer lag, RPC failover, storage outage + backfill, backup/restore drill, rollback app-only, worker/cache/SLO).
+
+## Fase 1G — Gate Staging (prasyarat Fase 2)
+
+> Fase 2 (kredensial anonim, relayer, ZK) sensitif dan mahal (gas + audit).
+> Jangan mulai sebelum pipeline dasar terbukti di jaringan nyata.
+> Ref: `docs/STAGING.md`. Tanda `[kamu]` = butuh akun/kunci darimu.
+
+- [x] **1G-001** git init + commit awal + `.gitattributes` + artifacts/cache `.env` tidak ikut
+- [x] **1G-002** Drift docs T1-028 closed (PRD 5-state, ARCHITECTURE stack-lock + VISIBLE-langsung, kontrak tanpa OZ, ROADMAP fase 3)
+- [x] **1G-003** Runbook staging + operasi + review (`STAGING.md`, `OPERATIONS.md`, `SECURITY_REVIEW_1H.md`)
+- [ ] **1G-004** Remote + push + CI hijau [kamu]
+- [ ] **1G-005** DB + API + web staging + smoke `/health /feed /slo` [kamu]
+- [ ] **1G-006** Sepolia deploy + verify explorer + `proof` end-to-end [kamu, funded key]
+- [ ] **1G-007** ZAP baseline (tanpa High) + Lighthouse (perf≥85, a11y 100) [kamu]
+
+**Gate 1G → Fase 2:** 1G-004..007 hijau. Baru spike T2-004 (riset ZK) + threat model.
 
 ## Fase 2 — Privacy (Backlog P2, desain dulu)
 
