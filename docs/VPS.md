@@ -53,13 +53,13 @@ git clone https://github.com/REY-STTP/Confession-Booth.git booth && cd booth
 cp .env.example .env
 ```
 
-Isi `.env` (ganti yang bertanda `<>`):
+Isi `.env` (sama daftarnya dengan `.env.example`; ganti yang bertanda `<>`):
 
 ```env
 POSTGRES_USER=booth
 POSTGRES_PASSWORD=<<acak-kuat>>
 POSTGRES_DB=booth
-DATABASE_URL=postgres://booth:<<acak-kuat>>@postgres:5432/booth
+DATABASE_URL=<<URL-Neon-pooler>>
 SESSION_SECRET=<<openssl rand -hex 32>>
 ADMIN_SECRET=<<acak-kuat>>
 CORS_ORIGIN=https://confession-booth.web.id
@@ -68,6 +68,12 @@ API_DOMAIN=api.confession-booth.web.id
 NEXT_PUBLIC_CHAIN_ID=11155111
 NEXT_PUBLIC_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
 NODE_ENV=production
+# Opsional staging, boleh kosong (worker skip aman / default aman):
+RPC_URL=
+RPC_WS_URL=
+PUBLISHER_KEY=
+STORAGE_ENDPOINT=
+REDIS_URL=
 ```
 
 Generate secret: `openssl rand -hex 32`. (`CORS_ORIGIN` boleh koma-lipat ganda
