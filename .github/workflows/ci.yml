@@ -43,5 +43,5 @@ jobs:
       - run: npm audit --omit=dev
       # T1G: pastikan image produksi bisa dibangun (tanpa push).
       - run: docker build -f apps/api/Dockerfile .
-      - run: docker build apps/web
+      - run: docker build -f apps/web/Dockerfile .
       - run: npm run build
