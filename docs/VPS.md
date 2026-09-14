@@ -7,11 +7,16 @@ lewat HTTP; tanpa HTTPS sesi mati tiap 1 jam).
 
 ## 1. DNS (DNSPod/panel domainmu)
 
-| Host | Tipe | Nilai |
-|---|---|---|
-| `@` | A | `76.76.21.21` (Vercel apex) |
-| `www` | CNAME | `cname.vercel-dns.com` (opsional) |
-| `api` | A | IP publik CVM |
+> Nilai `A @` dan `CNAME www` WAJIB mengikuti dasbor Vercel → Domains
+> (Vercel memberi IP Anycast + hostname verifikasi spesifik per domain —
+> contoh: `A @ → 216.198.79.1`, `CNAME www → xxx.vercel-dns-017.com`).
+> Jangan pakai nilai generik dari tutorial.
+
+| Host  | Tipe  | Nilai                |
+| ----- | ----- | -------------------- |
+| `@`   | A     | sesuai dasbor Vercel |
+| `www` | CNAME | sesuai dasbor Vercel |
+| `api` | A     | IP publik CVM        |
 
 ## 2. Web → Vercel [dashboard]
 
