@@ -1,0 +1,9 @@
+# Caddy reverse proxy VPS (T1G): TLS otomatis via Let's Encrypt.
+# Domain dari env WEB_DOMAIN / API_DOMAIN (lihat docs/VPS.md).
+{$WEB_DOMAIN} {
+	reverse_proxy web:3000
+}
+
+{$API_DOMAIN} {
+	reverse_proxy api:4000
+}

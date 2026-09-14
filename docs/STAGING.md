@@ -25,6 +25,10 @@ DATABASE_URL='<neon-url>' npm run db:setup --workspace @booth/api
 
 ## 3. API staging [kamu, 15 mnt]
 
+> Pivot T1G: Render butuh kartu → staging pindah ke VPS Ubuntu (CVM 2C4G).
+> Jalur Render tetap valid via `render.yaml` bila nanti ada kartu.
+> Ikuti **`docs/VPS.md`** (Caddy TLS otomatis + compose prod + UFW).
+
 Railway/Render/Fly dari Dockerfile `apps/api` (atau `docker compose` di VPS).
 Env wajib (lihat `.env.example`):
 
