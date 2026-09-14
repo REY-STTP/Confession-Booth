@@ -47,7 +47,7 @@ export async function abuseTick(db = getDb()): Promise<AbuseReport> {
   return { rescored: rescored.length, quarantined: quarantined.length };
 }
 
-const isMain = process.argv[1]?.endsWith('workers/abuse.js') ?? false;
+const isMain = (process.argv[1] ?? '').replace(/\\/g, '/').endsWith('workers/abuse.js');
 if (isMain) {
   const everyMs = Number(process.env.ABUSE_INTERVAL_MS ?? 5 * 60_000);
   console.log(`[abuse] loop tiap ${everyMs}ms`);

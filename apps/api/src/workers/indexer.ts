@@ -86,7 +86,7 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
   return report;
 }
 
-const isMain = process.argv[1]?.endsWith('workers/indexer.js') ?? false;
+const isMain = (process.argv[1] ?? '').replace(/\\/g, '/').endsWith('workers/indexer.js');
 if (isMain) {
   const everyMs = Number(process.env.INDEXER_INTERVAL_MS ?? 15_000);
   console.log(`[indexer] loop tiap ${everyMs}ms`);

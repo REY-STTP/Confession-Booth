@@ -124,7 +124,7 @@ export async function publisherTick(
 }
 
 // Loop mode saat dijalankan langsung: node dist/workers/publisher.js
-const isMain = process.argv[1]?.endsWith('workers/publisher.js') ?? false;
+const isMain = (process.argv[1] ?? '').replace(/\\/g, '/').endsWith('workers/publisher.js');
 if (isMain) {
   const everyMs = Number(process.env.PUBLISHER_INTERVAL_MS ?? 15_000);
   console.log(`[publisher] loop tiap ${everyMs}ms`);

@@ -111,7 +111,7 @@ export async function rankingTick(db = getDb(), batch = 500): Promise<RankingRep
 }
 
 // Loop mode saat dijalankan langsung: node dist/workers/ranking.js
-const isMain = process.argv[1]?.endsWith('workers/ranking.js') ?? false;
+const isMain = (process.argv[1] ?? '').replace(/\\/g, '/').endsWith('workers/ranking.js');
 if (isMain) {
   const everyMs = Number(process.env.RANKING_INTERVAL_MS ?? 60_000);
   console.log(`[ranking] loop tiap ${everyMs}ms`);

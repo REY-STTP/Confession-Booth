@@ -1,0 +1,42 @@
+# Render Blueprint T1G — deploy 1-klik staging (free tier).
+# Cara: dashboard Render → New → Blueprint → pilih repo → Apply.
+# Isi env `sync: false` di dashboard (JANGAN commit secret).
+services:
+  - type: web
+    name: booth-api
+    runtime: docker
+    dockerContext: .
+    dockerfilePath: apps/api/Dockerfile
+    # API + publisher/indexer/ranking/abuse dalam 1 service (hemat free tier).
+    startCommand: node scripts/start-all.mjs
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: APP_DOMAIN
+        sync: false
+      - key: ADMIN_SECRET
+        generateValue: true
+      - key: NEXT_PUBLIC_CHAIN_ID
+        value: 11155111
+      - key: RPC_URL
+        sync: false
+      - key: RPC_WS_URL
+        sync: false
+      - key: PUBLISHER_KEY
+        sync: false
+      - key: STORAGE_ENDPOINT
+        sync: false
+      - key: STORAGE_API_KEY
+        sync: false
+      - key: STORAGE_API_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: POW_DIFFICULTY
+        value: 14
