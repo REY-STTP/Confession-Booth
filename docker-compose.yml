@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: booth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-booth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-booth}
+      POSTGRES_DB: ${POSTGRES_DB:-booth}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - booth-pgdata:/var/lib/postgresql/data
+      # Backup harian (T1-040): mount direktori backup host.
+      - ./backups:/backups
+
+  api:
+    build: ./apps/api
+    container_name: booth-api
+    depends_on:
+      - postgres
+    environment:
+      # Wajib (boot fatal di production bila kosong — config.ts):
+      DATABASE_URL: ${DATABASE_URL:-postgres://booth:booth@postgres:5432/booth}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-only-change-me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      APP_DOMAIN: ${APP_DOMAIN:-booth.local}
+      # Chain/publisher (boleh kosong di dev → worker skip aman):
+      RPC_URL: ${RPC_URL:-}
+      RPC_WS_URL: ${RPC_WS_URL:-}
+      PUBLISHER_KEY: ${PUBLISHER_KEY:-}
+      NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-11155111}
+      NEXT_PUBLIC_CONTRACT_ADDRESS: ${NEXT_PUBLIC_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}
+      # Storage Fase 1.5 (nullable di MVP):
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-}
+      STORAGE_API_KEY: ${STORAGE_API_KEY:-}
+      STORAGE_API_SECRET: ${STORAGE_API_SECRET:-}
+      # Hardening 1.5 (opsional, ada default aman):
+      REDIS_URL: ${REDIS_URL:-}
+      POW_DIFFICULTY: ${POW_DIFFICULTY:-14}
+      CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
+      # Admin bootstrap (server-only, JANGAN NEXT_PUBLIC_*):
+      ADMIN_SECRET: ${ADMIN_SECRET:-}
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    container_name: booth-web
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      NEXT_PUBLIC_CHAIN_ID: ${NEXT_PUBLIC_CHAIN_ID:-11155111}
+      NEXT_PUBLIC_CONTRACT_ADDRESS: ${NEXT_PUBLIC_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}
+    ports:
+      - "3000:3000"
+
+  # Backup PG harian (T1-040): `docker compose --profile backup run backup`.
+  backup:
+    image: postgres:16-alpine
+    profiles: ["backup"]
+    depends_on:
+      - postgres
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-booth}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-booth}
+      PGDATABASE: ${POSTGRES_DB:-booth}
+    volumes:
+      - ./backups:/backups
+    command: sh -c "pg_dump -Fc -f /backups/booth-$$(date +%F).dump"
+
+volumes:
+  booth-pgdata:

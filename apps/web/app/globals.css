@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: #0b0b10;
+  color: #eceaf0;
+}
+
+:focus-visible {
+  outline: 2px solid #c9a7ff;
+  outline-offset: 2px;
+}
+
+.booth-card {
+  background: #14141c;
+  border: 1px solid #262631;
+  border-radius: 1rem;
+}

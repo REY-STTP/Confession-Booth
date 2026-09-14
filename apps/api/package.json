@@ -1,0 +1,46 @@
+{
+  "name": "@booth/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && node --watch ./dist/index.js",
+    "build": "npm run build --workspace @booth/shared && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --test-concurrency=1 dist/**/*.test.js",
+    "pretest": "npm run build",
+    "start": "node ./dist/index.js",
+    "db:migrate": "node scripts/db/migrate.mjs up",
+    "db:rollback": "node scripts/db/migrate.mjs down",
+    "db:seed": "node scripts/db/seed.mjs",
+    "db:backup": "node scripts/db/backup.mjs backup",
+    "db:restore": "node scripts/db/backup.mjs restore",
+    "db:backup:verify": "node scripts/db/backup-verify.mjs",
+    "db:backfill-storage": "node scripts/db/backfill-storage.mjs",
+    "load": "node scripts/load.mjs",
+    "worker:publisher": "node ./dist/workers/publisher.js",
+    "worker:indexer": "node ./dist/workers/indexer.js",
+    "worker:ranking": "node ./dist/workers/ranking.js",
+    "worker:abuse": "node ./dist/workers/abuse.js",
+    "db:setup": "node scripts/db/migrate.mjs up && node scripts/db/seed.mjs"
+  },
+  "dependencies": {
+    "@booth/shared": "^0.1.0",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^12.0.1",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "fastify": "^5.2.1",
+    "pg": "^8.23.0",
+    "redis": "^6.2.1",
+    "viem": "^2.56.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.7.3"
+  }
+}

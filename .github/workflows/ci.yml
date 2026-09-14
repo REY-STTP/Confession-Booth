@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: booth
+          POSTGRES_PASSWORD: booth
+          POSTGRES_DB: booth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://booth:booth@localhost:5432/booth
+      SESSION_SECRET: ci-only-min-32-chars-secret-000000
+      APP_DOMAIN: booth.local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run db:setup --workspace @booth/api
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      # T1H-006: E2E butuh browser (API absen → fallback mock tetap diuji).
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run e2e --workspace @booth/web
+      - run: npm audit --omit=dev
+      - run: npm run build

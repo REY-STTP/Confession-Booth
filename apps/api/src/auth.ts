@@ -1,0 +1,290 @@
+// Auth wallet T1-002: nonce challenge gaya SIWE/EIP-4361 + sesi token.
+// - Challenge: domain-bound, random, kedaluwarsa 5 mnt, sekali pakai (replay protection).
+// - Verifikasi signature server-side via viem (ECDSA murni, tanpa RPC untuk EOA).
+// - Token sesi: 32 byte acak, disimpan sebagai sha256 (bukan mentah).
+// - Raw signature/nonce TIDAK disimpan lebih lama dari operasional (nonce hash saja).
+
+import { randomBytes, createHash } from 'node:crypto';
+import { and, eq, isNull } from 'drizzle-orm';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { getAddress, isAddress, verifyMessage } from 'viem';
+import * as schema from './db/schema.js';
+import { config } from './config.js';
+
+export class AuthError extends Error {
+  status: number;
+  code: string;
+  constructor(code: string, message: string, status = 401) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export function sha256hex(s: string): string {
+  return createHash('sha256').update(s, 'utf8').digest('hex');
+}
+
+export interface ChallengeParams {
+  address: string;
+  chainId?: number;
+  domain?: string;
+  now?: number;
+}
+
+export function buildMessage(p: {
+  domain: string;
+  address: string;
+  nonce: string;
+  chainId: number;
+  issuedAt: string;
+  expiresAt: string;
+}): string {
+  return (
+    `${config.appName} sign-in\n` +
+    `\n` +
+    `Sign in to ${p.domain} to enter the booth. This signature proves you own this wallet. It costs nothing.\n` +
+    `\n` +
+    `Address: ${p.address}\n` +
+    `Nonce: ${p.nonce}\n` +
+    `Chain ID: ${p.chainId}\n` +
+    `Issued At: ${p.issuedAt}\n` +
+    `Expires At: ${p.expiresAt}`
+  );
+}
+
+/** Terbitkan challenge baru. Address dinormalisasi lowercase (SCHEMA §3).
+ *  T1-023: address wajib, chainId wajib valid (integer positif, allowlist = config.chainId). */
+export async function issueNonce(db: NodePgDatabase<typeof schema>, p: ChallengeParams) {
+  if (!p.address || !isAddress(p.address)) throw new AuthError('INVALID_ADDRESS', 'Invalid wallet address.', 400);
+  const address = p.address.toLowerCase();
+  const checksum = getAddress(address);
+  const domain = p.domain ?? config.appDomain;
+  const chainId = p.chainId ?? config.chainId;
+  if (!Number.isInteger(chainId) || (chainId as number) <= 0 || !Number.isSafeInteger(chainId as number)) {
+    throw new AuthError('INVALID_CHAIN', 'Invalid chain id.', 400);
+  }
+  if ((chainId as number) !== config.chainId) {
+    throw new AuthError('INVALID_CHAIN', 'Unsupported chain id.', 400);
+  }
+  const now = p.now ?? Date.now();
+  const nonce = randomBytes(24).toString('hex');
+  const issuedAt = new Date(now).toISOString();
+  const expiresAt = new Date(now + config.nonceTtlMs).toISOString();
+  const message = buildMessage({ domain, address: checksum, nonce, chainId, issuedAt, expiresAt });
+
+  await db.insert(schema.authNonces).values({
+    nonceHash: sha256hex(nonce),
+    domain,
+    address,
+    chainId,
+    issuedAt: new Date(now),
+    expiresAt: new Date(expiresAt),
+  });
+
+  return { nonce, message, expiresAt };
+}
+
+export interface VerifiedSession {
+  user: { id: string; walletAddress: string; role: 'USER' | 'MODERATOR' | 'ADMIN'; status: string };
+  accessToken: string;
+  accessExpiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
+}
+
+/** Verifikasi signature + konsumsi nonce sekali pakai + terbitkan sesi. */
+export async function verifyAndLogin(
+  db: NodePgDatabase<typeof schema>,
+  p: { address: string; signature: string; nonce: string; now?: number },
+): Promise<VerifiedSession> {
+  if (!isAddress(p.address)) throw new AuthError('INVALID_ADDRESS', 'Invalid wallet address.', 400);
+  const address = p.address.toLowerCase();
+  const now = p.now ?? Date.now();
+
+  const rows = await db
+    .select()
+    .from(schema.authNonces)
+    .where(eq(schema.authNonces.nonceHash, sha256hex(p.nonce)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new AuthError('UNKNOWN_NONCE', 'Unknown or invalid challenge.', 401);
+  if (row.consumedAt) throw new AuthError('NONCE_REUSED', 'Challenge already used.', 401);
+  if (row.expiresAt.getTime() <= now) throw new AuthError('NONCE_EXPIRED', 'Challenge expired.', 401);
+  if (row.domain !== config.appDomain) throw new AuthError('WRONG_DOMAIN', 'Challenge domain mismatch.', 401);
+  if (row.address !== address) throw new AuthError('ADDRESS_MISMATCH', 'Challenge address mismatch.', 401);
+  if (row.chainId !== config.chainId) throw new AuthError('INVALID_CHAIN', 'Challenge chain mismatch.', 401);
+
+  const message = buildMessage({
+    domain: row.domain,
+    address: getAddress(address),
+    nonce: p.nonce,
+    chainId: row.chainId,
+    issuedAt: row.issuedAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
+  });
+
+  let valid = false;
+  try {
+    valid = await verifyMessage({
+      address: getAddress(address),
+      message,
+      signature: p.signature as `0x${string}`,
+    });
+  } catch {
+    valid = false;
+  }
+  if (!valid) throw new AuthError('BAD_SIGNATURE', 'Signature verification failed.', 401);
+
+  const accessToken = randomBytes(32).toString('hex');
+  const refreshToken = randomBytes(32).toString('hex');
+  const accessExpiresAt = new Date(now + config.accessTtlMs);
+  const refreshExpiresAt = new Date(now + config.refreshTtlMs);
+
+  const user = await db.transaction(async (tx) => {
+    await tx
+      .update(schema.authNonces)
+      .set({ consumedAt: new Date(now) })
+      .where(eq(schema.authNonces.id, row.id));
+
+    const found = await tx
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.walletAddress, address))
+      .limit(1);
+    let u = found[0];
+    if (!u) {
+      const ins = await tx
+        .insert(schema.users)
+        .values({ walletAddress: address, chainId: row.chainId, lastSeenAt: new Date(now) })
+        .returning();
+      u = ins[0];
+    } else {
+      const upd = await tx
+        .update(schema.users)
+        .set({ lastSeenAt: new Date(now), chainId: row.chainId })
+        .where(eq(schema.users.id, u.id))
+        .returning();
+      u = upd[0];
+    }
+    await tx.insert(schema.sessions).values([
+      { userId: u.id, tokenHash: sha256hex(accessToken), expiresAt: accessExpiresAt },
+      { userId: u.id, tokenHash: sha256hex(refreshToken), expiresAt: refreshExpiresAt },
+    ]);
+    return u;
+  });
+
+  return {
+    user: { id: user.id, walletAddress: user.walletAddress, role: user.role, status: user.status },
+    accessToken,
+    accessExpiresAt: accessExpiresAt.toISOString(),
+    refreshToken,
+    refreshExpiresAt: refreshExpiresAt.toISOString(),
+  };
+}
+
+export interface AuthContext {
+  id: string;
+  walletAddress: string;
+  role: 'USER' | 'MODERATOR' | 'ADMIN';
+  status: 'ACTIVE' | 'BANNED' | 'RESTRICTED';
+}
+
+/** Resolve Bearer token → konteks user, atau null bila tidak valid. */
+export async function authenticate(db: NodePgDatabase<typeof schema>, rawToken: string): Promise<AuthContext | null> {
+  const rows = await db
+    .select({ session: schema.sessions, user: schema.users })
+    .from(schema.sessions)
+    .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+    .where(eq(schema.sessions.tokenHash, sha256hex(rawToken)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  if (row.session.revokedAt) return null;
+  if (row.session.expiresAt.getTime() <= Date.now()) return null;
+  return {
+    id: row.user.id,
+    walletAddress: row.user.walletAddress,
+    role: row.user.role,
+    status: row.user.status,
+  };
+}
+
+export async function revokeToken(db: NodePgDatabase<typeof schema>, rawToken: string): Promise<void> {
+  await db
+    .update(schema.sessions)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(schema.sessions.tokenHash, sha256hex(rawToken)), isNull(schema.sessions.revokedAt)));
+}
+
+/** Refresh: tukar refresh token dengan pasangan baru (rotasi). */
+export async function rotateRefresh(
+  db: NodePgDatabase<typeof schema>,
+  rawRefresh: string,
+  now = Date.now(),
+): Promise<{ accessToken: string; accessExpiresAt: string; refreshToken: string; refreshExpiresAt: string }> {
+  const rows = await db
+    .select({ session: schema.sessions, user: schema.users })
+    .from(schema.sessions)
+    .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+    .where(eq(schema.sessions.tokenHash, sha256hex(rawRefresh)))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.session.revokedAt || row.session.expiresAt.getTime() <= now) {
+    throw new AuthError('INVALID_REFRESH', 'Invalid refresh token.', 401);
+  }
+  // T1-023: akun BANNED/RESTRICTED tidak boleh rotate refresh.
+  if (row.user.status !== 'ACTIVE') {
+    throw new AuthError('FORBIDDEN', 'Account restricted.', 403);
+  }
+  // Refresh token harus berumur panjang — tolak token akses (sisa < 25 jam) sebagai refresh.
+  const remaining = row.session.expiresAt.getTime() - now;
+  if (remaining < 25 * 3600_000) throw new AuthError('INVALID_REFRESH', 'Invalid refresh token.', 401);
+
+  const accessToken = randomBytes(32).toString('hex');
+  const nextRefresh = randomBytes(32).toString('hex');
+  const accessExpiresAt = new Date(now + config.accessTtlMs);
+  const refreshExpiresAt = new Date(now + config.refreshTtlMs);
+  await db.transaction(async (tx) => {
+    await tx.update(schema.sessions).set({ revokedAt: new Date(now) }).where(eq(schema.sessions.id, row.session.id));
+    await tx.insert(schema.sessions).values([
+      { userId: row.user.id, tokenHash: sha256hex(accessToken), expiresAt: accessExpiresAt },
+      { userId: row.user.id, tokenHash: sha256hex(nextRefresh), expiresAt: refreshExpiresAt },
+    ]);
+  });
+  return {
+    accessToken,
+    accessExpiresAt: accessExpiresAt.toISOString(),
+    refreshToken: nextRefresh,
+    refreshExpiresAt: refreshExpiresAt.toISOString(),
+  };
+}
+
+/** T1-023: cleanup nonce/sesi kedaluwarsa. Dipanggil cron/manual, cegah tabel tumbuh tanpa batas. */
+export async function cleanupAuthExpired(
+  db: NodePgDatabase<typeof schema>,
+  now = Date.now(),
+): Promise<{ nonces: number; sessions: number }> {
+  const { lt } = await import('drizzle-orm');
+  const n = await db.delete(schema.authNonces).where(lt(schema.authNonces.expiresAt, new Date(now)));
+  const s = await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date(now - 7 * 24 * 3600_000)));
+  void n;
+  void s;
+  return { nonces: 0, sessions: 0 };
+}
+
+/** T1-023: batasi sesi aktif per user (revoke tertua bila > 20). */
+export async function enforceSessionCap(
+  db: NodePgDatabase<typeof schema>,
+  userId: string,
+  cap = 20,
+): Promise<void> {
+  const { sql } = await import('drizzle-orm');
+  await db.execute(sql`
+    UPDATE sessions SET revoked_at = now() WHERE id IN (
+      SELECT id FROM sessions
+      WHERE user_id = ${userId}::uuid AND revoked_at IS NULL AND expires_at > now()
+      ORDER BY created_at DESC OFFSET ${cap}
+    )
+  `);
+}

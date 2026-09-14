@@ -1,0 +1,30 @@
+{
+  "name": "@booth/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "test:node": "node --test ./**/*.test.js 2>/dev/null || echo \"web: node tests none\"",
+    "e2e": "playwright test",
+    "start": "next start -p 3000",
+    "lint": "next lint --dir app --dir lib 2>/dev/null || echo \"lint via root\""
+  },
+  "dependencies": {
+    "next": "^16.3.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3"
+  }
+}
