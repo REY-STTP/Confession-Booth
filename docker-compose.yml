@@ -15,7 +15,9 @@ services:
       - ./backups:/backups
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     container_name: booth-api
     depends_on:
       - postgres

@@ -41,4 +41,7 @@ jobs:
         working-directory: apps/web
       - run: npm run e2e --workspace @booth/web
       - run: npm audit --omit=dev
+      # T1G: pastikan image produksi bisa dibangun (tanpa push).
+      - run: docker build -f apps/api/Dockerfile .
+      - run: docker build apps/web
       - run: npm run build

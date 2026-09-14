@@ -357,7 +357,7 @@ shared 18/18, API 61/61, E2E 5/5, `npm audit --omit=dev` 0).
 - [ ] **1G-004** Remote + push + CI hijau [kamu]
 - [ ] **1G-005** DB + API + web staging + smoke `/health /feed /slo` [kamu]
 - [ ] **1G-006** Sepolia deploy + verify explorer + `proof` end-to-end [kamu, funded key]
-- [ ] **1G-007** ZAP baseline (tanpa High) + Lighthouse (perf≥85, a11y 100) [kamu]
+- [ ] **1G-007** ZAP baseline (tanpa High) + Lighthouse (perf≥85, a11y 100) [kamu staging; lokal ✅ 2026-09-15: feed 96/100, home 100/100 — staging ulang pasca-deploy]
 
 **Gate 1G → Fase 2:** 1G-004..007 hijau. Baru spike T2-004 (riset ZK) + threat model.
 

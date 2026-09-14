@@ -12,6 +12,7 @@ sebelum mainnet (lihat checklist §5).
 | `npm run lint` | hijau (`--max-warnings 0`) |
 | Secret-in-repo | tidak ada `PUBLISHER_KEY/DEPLOYER_KEY/SESSION_SECRET` ter-commit (hanya `.env.example` + placeholder `0x000...`); `apps/api/.env` di-ignore |
 | Privacy scan otomatis | `privacy.test.ts` 4/4 + `assertPublicSafe` di semua respons publik |
+| Lighthouse lokal (prod build, desktop) | `/feed` perf 96 + a11y 100, `/` perf 100 + a11y 100 (target ≥85/100 ✅, 2026-09-15; staging ulang pasca-deploy) |
 | CSP web | `script-src 'self' 'unsafe-inline'` (wajib Next.js; XSS dilapis React-escape + tolak markup + Zod) |
 
 ## 2. Permukaan yang diperiksa
