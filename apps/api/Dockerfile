@@ -1,7 +1,8 @@
 # T1-025/T1G: image API dari root monorepo (workspace @booth/shared ikut ter-resolve).
 # Build context HARUS repo root (lihat docker-compose.yml / CI):
 #   docker build -f apps/api/Dockerfile .
-FROM node:20-alpine AS build
+# Base node:22 (local dev v22 + cookie@2 butuh >=22).
+FROM node:22-alpine AS build
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
@@ -12,12 +13,13 @@ COPY packages/shared packages/shared
 COPY apps/api apps/api
 RUN npm run build --workspace @booth/api
 
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY packages/shared/package.json packages/shared/
-RUN npm ci --omit=dev --workspace @booth/api --include-workspace-root \
+# --ignore-scripts: jangan jalankan root `prepare` (husky) tanpa devDeps.
+RUN npm ci --omit=dev --ignore-scripts --workspace @booth/api --include-workspace-root \
   && rm -rf /root/.npm
 # Artefak build + migrasi SQL (dibutuhkan scripts/db/migrate.mjs) + seed.
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
