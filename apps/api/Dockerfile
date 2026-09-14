@@ -31,4 +31,5 @@ USER booth
 WORKDIR /app/apps/api
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1:4000/api/health || exit 1
-CMD ["node", "./dist/index.js"]
+# API + 4 worker satu proses (hemat free tier; worker tanpa kredensial skip aman).
+CMD ["node", "./scripts/start-all.mjs"]

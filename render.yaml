@@ -7,8 +7,7 @@ services:
     runtime: docker
     dockerContext: .
     dockerfilePath: apps/api/Dockerfile
-    # API + publisher/indexer/ranking/abuse dalam 1 service (hemat free tier).
-    startCommand: node scripts/start-all.mjs
+    # Command dari Dockerfile CMD (API + 4 worker via scripts/start-all.mjs).
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
