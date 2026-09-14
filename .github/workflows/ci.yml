@@ -35,10 +35,10 @@ jobs:
       - run: npm run db:setup --workspace @booth/api
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
-      # T1H-006: E2E butuh browser (API absen → fallback mock tetap diuji).
+      # Browser dulu: root `npm test` menjalankan Playwright web.
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
+      - run: npm test
       - run: npm run e2e --workspace @booth/web
       - run: npm audit --omit=dev
       # T1G: pastikan image produksi bisa dibangun (tanpa push).
