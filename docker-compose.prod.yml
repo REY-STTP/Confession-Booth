@@ -1,5 +1,5 @@
 # Override produksi VPS (T1G): Caddy TLS otomatis + restart policy.
-# Pakai: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# API-only (web di Vercel). Pakai: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api postgres caddy
 # Akses publik HANYA via 80/443 Caddy; port service lain dijaga UFW (lihat docs/VPS.md).
 services:
   api:
