@@ -66,6 +66,23 @@ services:
     ports:
       - '3000:3000'
 
+  publisher:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: booth-publisher
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://booth:booth@postgres:5432/booth}
+      RPC_URL: ${RPC_URL:-}
+      RPC_WS_URL: ${RPC_WS_URL:-}
+      PUBLISHER_KEY: ${PUBLISHER_KEY:-}
+      CHAIN_ID: ${CHAIN_ID:-11155111}
+      CONTRACT_ADDRESS: ${CONTRACT_ADDRESS:-}
+    command: node ./dist/workers/publisher.js
+
   # Backup PG harian (T1-040): `docker compose --profile backup run backup`.
   backup:
     image: postgres:16-alpine
