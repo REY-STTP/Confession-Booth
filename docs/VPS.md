@@ -82,10 +82,14 @@ bila perlu preview Vercel, mis. `https://confession-booth.web.id,https://xxx.ver
 
 ## 5. Naik + migrasi + smoke
 
+> DB staging = Neon (sudah dimigrasi + seed). Service `postgres` lokal
+> TIDAK dijalankan — hemat RAM, satu sumber data. Backup jalan dari laptop
+> (sudah terbukti), bukan dari VPS.
+
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api postgres caddy
-docker compose exec api node scripts/db/migrate.mjs up
-docker compose exec api node scripts/db/seed.mjs
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api caddy
+docker compose logs api | grep -E "start-all|listening|storage"   # 5 proses harus muncul
+docker compose exec api node scripts/db/migrate.mjs up   # idempoten, aman diulang
 curl https://api.confession-booth.web.id/api/health
 curl 'https://api.confession-booth.web.id/api/feed?sort=new&limit=5'
 curl https://api.confession-booth.web.id/api/slo
@@ -94,14 +98,19 @@ curl https://api.confession-booth.web.id/api/slo
 Buka `https://confession-booth.web.id/feed` → harus tampil (banner offline =
 URL API/CORS salah — cek `NEXT_PUBLIC_API_URL` di Vercel + redeploy web).
 
+Langkah berikut setelah hijau: grant moderator pertama (lihat jawaban
+ADMIN_SECRET di chat) — butuh wallet moderator login sekali dulu.
+
 ## 6. Rutin
 
 ```bash
 docker compose logs -f api               # log (tanpa isi confession/signature)
-docker compose exec api node scripts/db/backup.mjs backup   # backup manual
-crontab -e                               # + 0 2 * * * cd ~/booth && docker compose run --rm backup
-git pull && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api postgres caddy  # update
+git pull && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build api caddy  # update
 ```
+
+Backup: dari laptop (`npm run db:backup:verify --workspace @booth/api`
+dengan `PGBIN` ke PostgreSQL lokal) — sudah terbukti `size=86592B tables=16`.
+Cron VPS tidak dipakai selama DB di Neon.
 
 Rollback app: `git checkout <commit-lama> && ... up -d --build ...`
 (kontrak immutable — histori on-chain tidak bisa di-rollback).
