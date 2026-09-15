@@ -393,7 +393,7 @@ shared 18/18, API 61/61, E2E 5/5, `npm audit --omit=dev` 0).
 - [x] **1G-002** Drift docs T1-028 closed (PRD 5-state, ARCHITECTURE stack-lock + VISIBLE-langsung, kontrak tanpa OZ, ROADMAP fase 3)
 - [x] **1G-003** Runbook staging + operasi + review (`STAGING.md`, `OPERATIONS.md`, `SECURITY_REVIEW_1H.md`)
 - [x] **1G-004** Remote + push + CI hijau [kamu repo; fix: pretypecheck, runner run-node-tests.mjs, playwright order, docker root-context — CI hijau penuh 2026-09-15]
-- [x] **1G-005** DB + API + web staging + smoke `/health /feed /slo` [Neon ✅ 2026-09-14; VPS Caddy+TLS ✅ 2026-09-15: health ok, feed 200 (kosong = benar, belum ada confession), slo ok; web Vercel ✅; fix: API_DOMAIN ke container, depends api saja]
+- [x] **1G-005** DB + API + web staging + smoke `/health /feed /slo` [Neon ✅ 2026-09-14; VPS Caddy+TLS ✅ 2026-09-15: health ok, feed 200 (kosong = benar, belum ada confession), slo ok; web Vercel ✅; fix: API_DOMAIN ke container, depends api saja; CORS wajib daftar apex+www persis (`CORS_ORIGIN` koma, recreate setelah ubah)]
 - [ ] **1G-006** Sepolia deploy + verify explorer + `proof` end-to-end [kamu, funded key]
 - [ ] **1G-007** ZAP baseline (tanpa High) + Lighthouse (perf≥85, a11y 100) [kamu staging; lokal ✅ 2026-09-15: feed 96/100, home 100/100 — staging ulang pasca-deploy]
 
