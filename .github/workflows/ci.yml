@@ -24,6 +24,7 @@ jobs:
     env:
       DATABASE_URL: postgres://booth:booth@localhost:5432/booth
       SESSION_SECRET: ci-only-min-32-chars-secret-000000
+      ADMIN_SECRET: ci-only-admin-secret-00000000000
       APP_DOMAIN: booth.local
     steps:
       - uses: actions/checkout@v4

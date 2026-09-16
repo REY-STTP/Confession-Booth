@@ -25,10 +25,16 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
   // AUDIT SEC-001: dilindungi ADMIN_SECRET agar tidak jadi information disclosure.
   app.get('/api/metrics', async (req, reply) => {
     const secret = process.env.ADMIN_SECRET ?? '';
-    if (!secret || req.headers['x-admin-secret'] !== secret) {
+    if (secret) {
+      if (req.headers['x-admin-secret'] !== secret) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
+      }
+    } else if (process.env.NODE_ENV === 'production') {
       return reply
         .code(403)
-        .send({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
+        .send({ error: { code: 'FORBIDDEN', message: 'Admin secret not configured.' } });
     }
     const db = getDb();
     let queueDepth = 0;
@@ -47,10 +53,16 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
   // AUDIT SEC-001: dilindungi ADMIN_SECRET.
   app.get('/api/slo', async (req, reply) => {
     const secret = process.env.ADMIN_SECRET ?? '';
-    if (!secret || req.headers['x-admin-secret'] !== secret) {
+    if (secret) {
+      if (req.headers['x-admin-secret'] !== secret) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
+      }
+    } else if (process.env.NODE_ENV === 'production') {
       return reply
         .code(403)
-        .send({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
+        .send({ error: { code: 'FORBIDDEN', message: 'Admin secret not configured.' } });
     }
     return sloSnapshot();
   });

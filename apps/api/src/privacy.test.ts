@@ -21,10 +21,24 @@ describe('privacy: metrics + error tanpa identitas (T1-050)', () => {
     assert.ok(!JSON.stringify(res.json()).includes('booth_refresh'));
   });
   it('/api/metrics menolak akses tanpa x-admin-secret (SEC-001)', async () => {
-    const secret = process.env.ADMIN_SECRET;
-    if (secret) {
+    const prevSecret = process.env.ADMIN_SECRET;
+    try {
+      process.env.ADMIN_SECRET = 'temp-test-admin-secret-xyz';
       const res = await app.inject({ method: 'GET', url: '/api/metrics' });
       assert.equal(res.statusCode, 403);
+
+      const okRes = await app.inject({
+        method: 'GET',
+        url: '/api/metrics',
+        headers: { 'x-admin-secret': 'temp-test-admin-secret-xyz' },
+      });
+      assert.equal(okRes.statusCode, 200);
+    } finally {
+      if (prevSecret !== undefined) {
+        process.env.ADMIN_SECRET = prevSecret;
+      } else {
+        delete process.env.ADMIN_SECRET;
+      }
     }
   });
   it('metricsSnapshot tidak memuat secret', () => {
