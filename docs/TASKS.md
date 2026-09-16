@@ -395,9 +395,9 @@ shared 18/18, API 61/61, E2E 5/5, `npm audit --omit=dev` 0).
 - [x] **1G-004** Remote + push + CI hijau [kamu repo; fix: pretypecheck, runner run-node-tests.mjs, playwright order, docker root-context — CI hijau penuh 2026-09-15]
 - [x] **1G-005** DB + API + web staging + smoke `/health /feed /slo` [Neon ✅ 2026-09-14; VPS Caddy+TLS ✅ 2026-09-15: health ok, feed 200 (kosong = benar, belum ada confession), slo ok; web Vercel ✅; fix: API_DOMAIN ke container, depends api saja; CORS wajib daftar apex+www persis (`CORS_ORIGIN` koma, recreate setelah ubah)]
 - [x] **1G-006** Sepolia deploy + verify explorer + `proof` end-to-end [Sepolia deploy 0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0 ✅; Etherscan verified v0.8.24 ✅; proof end-to-end CONFIRMED tx 0x81240421... blok 11716264 event ConfessionPublished ✅ 2026-09-16]
-- [ ] **1G-007** ZAP baseline (tanpa High) + Lighthouse (perf≥85, a11y 100) [kamu staging; lokal ✅ 2026-09-15: feed 96/100, home 100/100 — staging ulang pasca-deploy]
+- [x] **1G-007** ZAP baseline (tanpa High) + Lighthouse (perf≥85, a11y 100) [staging live ✅ 2026-09-16: home perf 100/a11y 100, feed perf 92/a11y 100; security headers HSTS/CSP/nosniff/DENY/CORS/CSRF ✅; tanpa High]
 
-**Gate 1G → Fase 2:** 1G-004..007 hijau. Baru spike T2-004 (riset ZK) + threat model.
+**Gate 1G → Fase 2:** 1G-004..007 hijau penuh (SELESAI ✅ 2026-09-16). Siap masuk Fase 2 (spike T2-004 riset ZK + threat model).
 
 ## Fase 2 — Privacy (Backlog P2, desain dulu)
 

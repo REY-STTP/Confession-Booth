@@ -110,4 +110,4 @@ staging boleh `db:rollback` + `db:setup` ulang. Lihat `docs/OPERATIONS.md §5`.
 - [x] Remote + push [kamu]
 - [x] DB + API + web staging [kamu]
 - [x] Sepolia deploy + verify [kamu, funded key]
-- [ ] ZAP + Lighthouse [kamu]
+- [x] ZAP + Lighthouse [kamu]
