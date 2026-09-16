@@ -59,12 +59,19 @@ pnpm-debug.log*
 Thumbs.db
 Desktop.ini
 
-# IDE & Assistant Skills (Local only, not for production)
+# IDE, Assistant Skills & Documentation (Local only, not for production)
 .agents/
 .idea/
 .vscode/
 *.sublime-workspace
 skills-lock.json
 
-# docs
+# Documentation
 docs/
+docs/**
+/docs/
+/docs/**
+apps/*/AGENTS.md
+apps/*/CLAUDE.md
+AGENTS.md
+CLAUDE.md

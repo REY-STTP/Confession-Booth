@@ -57,12 +57,13 @@ export function HeaderNav() {
           href="/"
           className="group flex items-center gap-2.5 transition-transform active:scale-[0.98]"
         >
-          <BrandMark size="sm" className="size-8 transition-transform group-hover:scale-105" />
-          <div className="flex flex-col">
-            <span className="text-base font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
-              Confession Booth
-            </span>
-          </div>
+          <BrandMark
+            size="sm"
+            className="size-8 shrink-0 transition-transform group-hover:scale-105"
+          />
+          <span className="text-base font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors leading-none">
+            Confession Booth
+          </span>
         </Link>
 
         {/* Desktop Navigation Links */}
