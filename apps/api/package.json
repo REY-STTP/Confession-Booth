@@ -23,6 +23,7 @@
     "worker:indexer": "node ./dist/workers/indexer.js",
     "worker:ranking": "node ./dist/workers/ranking.js",
     "worker:abuse": "node ./dist/workers/abuse.js",
+    "worker:cleanup": "node ./dist/workers/cleanup.js",
     "db:setup": "node scripts/db/migrate.mjs up && node scripts/db/seed.mjs"
   },
   "dependencies": {

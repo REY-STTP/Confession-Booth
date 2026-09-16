@@ -10,7 +10,7 @@ export function getPool(): pg.Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error('DATABASE_URL belum di-set (lihat .env.example)');
-    pool = new pg.Pool({ connectionString, max: 10 });
+    pool = new pg.Pool({ connectionString, max: Number(process.env.DB_POOL_MAX ?? 10) });
   }
   return pool;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   countChars,
   API_URL,
@@ -472,8 +472,8 @@ export function ReportModal({ onClose, targetId }: { onClose: () => void; target
   const [reason, setReason] = useState('SPAM');
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
-  const boxRef = useState(() => ({ current: null as HTMLDivElement | null }))[0];
-  const prevFocus = useState(() => ({ current: null as Element | null }))[0];
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const prevFocus = useRef<Element | null>(null);
 
   // T1-043: focus-trap ringan + Escape + return-focus + initial-focus.
   useEffect(() => {
@@ -503,7 +503,7 @@ export function ReportModal({ onClose, targetId }: { onClose: () => void; target
       document.removeEventListener('keydown', onKey);
       (prevFocus.current as HTMLElement | null)?.focus?.();
     };
-  }, [onClose, boxRef, prevFocus]);
+  }, [onClose]);
 
   return (
     <div

@@ -12,11 +12,20 @@ await app.ready();
 
 describe('privacy: metrics + error tanpa identitas (T1-050)', () => {
   it('/api/metrics tanpa wallet/user/ip/session/notes', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/metrics' });
+    const secret = process.env.ADMIN_SECRET;
+    const headers: Record<string, string> = secret ? { 'x-admin-secret': secret } : {};
+    const res = await app.inject({ method: 'GET', url: '/api/metrics', headers });
     assert.equal(res.statusCode, 200);
     const leaks = assertPublicSafe(res.json());
     assert.deepEqual(leaks, []);
     assert.ok(!JSON.stringify(res.json()).includes('booth_refresh'));
+  });
+  it('/api/metrics menolak akses tanpa x-admin-secret (SEC-001)', async () => {
+    const secret = process.env.ADMIN_SECRET;
+    if (secret) {
+      const res = await app.inject({ method: 'GET', url: '/api/metrics' });
+      assert.equal(res.statusCode, 403);
+    }
   });
   it('metricsSnapshot tidak memuat secret', () => {
     const s = JSON.stringify(metricsSnapshot());

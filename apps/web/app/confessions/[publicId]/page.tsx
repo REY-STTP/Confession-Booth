@@ -84,26 +84,76 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
     }
   }, [accessToken]);
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
   async function react(type: string) {
     if (state !== 'booth' || !accessToken) {
       setLoadError('Masuk booth dulu untuk memberi reaksi.');
       return;
     }
     const on = !reacted[type];
+    const key = type.toLowerCase();
+
+    // AUDIT FG-003 & UX-003: Toggle un-react dan update state optimistik seketika
     setReacted((s) => ({ ...s, [type]: on }));
-    try {
-      const res = await apiFetch(
-        `/api/confessions/${encodeURIComponent(publicId)}/reactions`,
-        accessToken,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type }),
+    setItem((prev) => {
+      if (!prev) return prev;
+      const current = prev.reactions[key] ?? 0;
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [key]: Math.max(0, current + (on ? 1 : -1)),
         },
-      );
+      };
+    });
+
+    try {
+      const res = on
+        ? await apiFetch(
+            `/api/confessions/${encodeURIComponent(publicId)}/reactions`,
+            accessToken,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type }),
+            },
+          )
+        : await apiFetch(
+            `/api/confessions/${encodeURIComponent(publicId)}/reactions/${encodeURIComponent(type)}`,
+            accessToken,
+            {
+              method: 'DELETE',
+            },
+          );
+
       if (!res.ok) throw new Error(`react failed: ${res.status}`);
     } catch {
+      // Revert rollback bila gagal
       setReacted((s) => ({ ...s, [type]: !on }));
+      setItem((prev) => {
+        if (!prev) return prev;
+        const current = prev.reactions[key] ?? 0;
+        return {
+          ...prev,
+          reactions: {
+            ...prev.reactions,
+            [key]: Math.max(0, current + (on ? -1 : 1)),
+          },
+        };
+      });
+      setLoadError('Gagal memperbarui reaksi.');
+    }
+  }
+
+  async function handleShare() {
+    try {
+      const url = window.location.href;
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      // Fallback
     }
   }
 
@@ -249,24 +299,44 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
           {loadError}
         </p>
       ) : null}
-      <div className="flex flex-wrap gap-2" aria-label="Beri reaksi">
-        {['UNDERSTAND', 'LOVE', 'SAD', 'WILD', 'FUNNY'].map((t) => (
+      <div className="flex flex-wrap gap-2 items-center" aria-label="Beri reaksi dan aksi">
+        {[
+          { type: 'UNDERSTAND', emoji: '🕯️', label: 'Understand' },
+          { type: 'LOVE', emoji: '❤️', label: 'Love' },
+          { type: 'SAD', emoji: '😭', label: 'Sad' },
+          { type: 'WILD', emoji: '💀', label: 'Wild' },
+          { type: 'FUNNY', emoji: '😂', label: 'Funny' },
+        ].map(({ type: t, emoji, label }) => (
           <button
             key={t}
             onClick={() => react(t)}
             aria-pressed={!!reacted[t]}
-            className={`rounded-full border px-3 py-1.5 text-sm ${
+            aria-label={`Beri reaksi ${label}`}
+            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
               reacted[t]
                 ? 'border-booth-accent bg-booth-accent/10 font-medium text-booth-ink'
-                : 'border-booth-line text-booth-dim hover:text-booth-ink'
+                : 'border-booth-line text-booth-dim hover:text-booth-ink hover:border-booth-dim'
             }`}
           >
-            {t}
+            <span aria-hidden="true" className="mr-1.5">
+              {emoji}
+            </span>
+            {label}
           </button>
         ))}
         <button
+          type="button"
+          onClick={handleShare}
+          aria-label="Salin tautan halaman confession ini"
+          className="rounded-full border border-booth-line px-3 py-1.5 text-sm text-booth-dim hover:text-booth-ink hover:border-booth-accent transition-colors"
+        >
+          {copiedLink ? '✓ Tersalin!' : '🔗 Bagikan'}
+        </button>
+        <button
+          type="button"
           onClick={() => setReportOpen(true)}
-          className="rounded-full border border-booth-line px-3 py-1.5 text-sm text-booth-dim hover:text-booth-ink"
+          aria-label="Laporkan confession ini"
+          className="rounded-full border border-booth-line px-3 py-1.5 text-sm text-booth-dim hover:text-booth-ink hover:border-red-500/50 hover:text-red-400 transition-colors"
         >
           Report
         </button>

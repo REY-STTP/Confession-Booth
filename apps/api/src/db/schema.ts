@@ -166,6 +166,7 @@ export const confessions = pgTable(
     index('idx_confessions_category').on(t.categoryId, t.status, t.createdAt),
     index('idx_confessions_room').on(t.roomId, t.status, t.createdAt),
     index('idx_confessions_nullifier').on(t.nullifierHash),
+    index('idx_confessions_author').on(t.authorUserId),
   ],
 );
 
@@ -215,6 +216,7 @@ export const whispers = pgTable(
   (t) => [
     index('idx_whispers_confession').on(t.confessionId, t.createdAt),
     index('idx_whispers_parent').on(t.parentWhisperId),
+    index('idx_whispers_author').on(t.authorUserId),
   ],
 );
 

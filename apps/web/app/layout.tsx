@@ -1,11 +1,35 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SessionProvider } from '@/lib/session';
+import { HeaderNav } from '@/app/components/header-nav';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#0b0b10',
+};
 
 export const metadata: Metadata = {
-  title: 'Confession Booth — Say what you can\u2019t say',
+  title: {
+    template: '%s | Confession Booth',
+    default: 'Confession Booth — Say what you can’t say',
+  },
   description:
-    'Anonymous confession feed. Your confession is public. Your profile doesn\u2019t have to be.',
+    'Anonymous confession feed. Your confession is public. Your profile doesn’t have to be.',
+  openGraph: {
+    title: 'Confession Booth — Say what you can’t say',
+    description:
+      'Anonymous confession feed. Your confession is public. Your profile doesn’t have to be.',
+    type: 'website',
+    locale: 'id_ID',
+    siteName: 'Confession Booth',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Confession Booth — Say what you can’t say',
+    description:
+      'Anonymous confession feed. Your confession is public. Your profile doesn’t have to be.',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,33 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Lewati ke konten
         </a>
-        <header className="border-b border-booth-line">
-          <nav
-            className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4"
-            aria-label="Utama"
-          >
-            <a href="/" className="text-lg font-semibold tracking-wide">
-              🕯️ Confession Booth
-            </a>
-            <div className="flex gap-3 md:gap-4 text-sm text-booth-dim items-center">
-              <a className="hover:text-booth-ink" href="/feed">
-                Feed
-              </a>
-              <a className="hover:text-booth-ink text-booth-accent font-medium" href="/rooms">
-                Rooms
-              </a>
-              <a className="hover:text-booth-ink" href="/trending">
-                Trending
-              </a>
-              <a className="hover:text-booth-ink" href="/midnight">
-                Midnight
-              </a>
-              <a className="hover:text-booth-ink" href="/compose">
-                Confess
-              </a>
-            </div>
-          </nav>
-        </header>
+        <HeaderNav />
         <main id="main" className="mx-auto max-w-3xl px-4 pb-24 pt-8">
           <SessionProvider>{children}</SessionProvider>
         </main>

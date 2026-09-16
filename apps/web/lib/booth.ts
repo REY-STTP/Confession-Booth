@@ -135,20 +135,28 @@ export function countChars(s: string): number {
   return Array.from(s).length;
 }
 
-export async function getFeed(
+export interface FeedResult {
+  items: FeedItem[];
+  nextCursor: string | null;
+}
+
+export async function getFeedWithCursor(
   params: {
     sort?: string;
     category?: string;
     room?: string;
     q?: string;
     slot?: string;
+    cursor?: string | null;
+    limit?: number;
   } = {},
-): Promise<FeedItem[]> {
-  const qs = new URLSearchParams({ sort: params.sort ?? 'new', limit: '20' });
+): Promise<FeedResult> {
+  const qs = new URLSearchParams({ sort: params.sort ?? 'new', limit: String(params.limit ?? 20) });
   if (params.category) qs.set('category', params.category);
   if (params.room) qs.set('room', params.room);
   if (params.q) qs.set('q', params.q);
   if (params.slot) qs.set('slot', params.slot);
+  if (params.cursor) qs.set('cursor', params.cursor);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 8000);
   try {
@@ -159,7 +167,10 @@ export async function getFeed(
     if (!res.ok) throw new Error(`feed failed: ${res.status}`);
     const body = await res.json();
     lastFeedError = null;
-    return body.items as FeedItem[];
+    return {
+      items: (body.items ?? []) as FeedItem[],
+      nextCursor: body.nextCursor ?? null,
+    };
   } catch (e) {
     // T1-026: jangan silent — tandai offline agar UI bisa tampilkan error jujur.
     lastFeedError = {
@@ -170,10 +181,24 @@ export async function getFeed(
     if (params.category) items = items.filter((i) => i.category === params.category);
     if (params.q)
       items = items.filter((i) => i.content.toLowerCase().includes(params.q!.toLowerCase()));
-    return items;
+    return { items, nextCursor: null };
   } finally {
     clearTimeout(t);
   }
+}
+
+export async function getFeed(
+  params: {
+    sort?: string;
+    category?: string;
+    room?: string;
+    q?: string;
+    slot?: string;
+    cursor?: string | null;
+  } = {},
+): Promise<FeedItem[]> {
+  const res = await getFeedWithCursor(params);
+  return res.items;
 }
 
 export async function getRooms(): Promise<RoomItem[]> {

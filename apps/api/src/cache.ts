@@ -2,29 +2,46 @@
 // Tanpa REDIS_URL → memori proses (cukup 1 replika MVP).
 // Dengan REDIS_URL → Redis (bagi antar replika/worker), fallback memori bila putus.
 // Key: query string sort+category+limit+cursor+q+slot. Tanpa konten privat di key.
+// AUDIT SEC-005: Redis reconnect setelah recovery (bukan permanent down).
+// AUDIT PERF-006: LRU-style eviction (hapus 25% tertua, bukan clear semua).
 import { createClient, type RedisClientType } from 'redis';
 
 const store = new Map<string, { at: number; body: unknown }>();
 const TTL_MS = 60_000;
 const TTL_SEC = 60;
+const MAX_CACHE_SIZE = 500;
 
 let redis: RedisClientType | null = null;
 let redisDown = false;
+let redisDownSince = 0;
+const REDIS_RETRY_INTERVAL_MS = 30_000; // retry setiap 30 detik
 
 async function redisClient(): Promise<RedisClientType | null> {
   const url = (process.env.REDIS_URL ?? '').trim();
-  if (!url || redisDown) return null;
+  if (!url) return null;
+
+  // AUDIT SEC-005: jika Redis down, coba reconnect setelah interval
+  if (redisDown) {
+    if (Date.now() - redisDownSince < REDIS_RETRY_INTERVAL_MS) return null;
+    // Reset dan coba lagi
+    redisDown = false;
+    redis = null;
+  }
+
   if (redis) return redis;
   try {
     const client = createClient({ url, socket: { connectTimeout: 2000 } });
     client.on('error', () => {
       redisDown = true;
+      redisDownSince = Date.now();
+      redis = null;
     });
     await client.connect();
     redis = client as RedisClientType;
     return redis;
   } catch {
     redisDown = true;
+    redisDownSince = Date.now();
     return null;
   }
 }
@@ -36,11 +53,22 @@ function memGet(key: string): unknown | null {
     store.delete(key);
     return null;
   }
+  // LRU: update access time
+  e.at = Date.now();
   return e.body;
 }
 
+// AUDIT PERF-006: LRU eviction — hapus 25% entry terlama, bukan clear semua.
+function evictOldest(): void {
+  const toEvict = Math.floor(MAX_CACHE_SIZE * 0.25);
+  const entries = [...store.entries()].sort((a, b) => a[1].at - b[1].at);
+  for (let i = 0; i < toEvict && i < entries.length; i++) {
+    store.delete(entries[i][0]);
+  }
+}
+
 function memSet(key: string, body: unknown): void {
-  if (store.size > 500) store.clear();
+  if (store.size >= MAX_CACHE_SIZE) evictOldest();
   store.set(key, { at: Date.now(), body });
 }
 
