@@ -46,8 +46,8 @@ function RelatableInner() {
             </h1>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Diurutkan dari reaksi &ldquo;I understand&rdquo; terbanyak — resonansi rasa terdalam
-            dari sesama.
+            Sorted by the most &ldquo;I understand&rdquo; reactions — deepest shared resonance from
+            fellow visitors.
           </p>
         </div>
       </div>
@@ -59,7 +59,7 @@ function RelatableInner() {
           className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs sm:text-sm text-amber-200"
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
-          <p>API tidak terjangkau — menampilkan data cadangan lokal.</p>
+          <p>Sanctuary network unreachable — displaying cached local archive.</p>
         </div>
       ) : null}
 
@@ -69,11 +69,11 @@ function RelatableInner() {
       ) : items.length === 0 ? (
         <Empty
           title="The booth is quiet."
-          sub="Belum ada pengakuan yang menerima tanda pengertian."
+          sub="No confessions have received resonance marks yet."
           action={
             <Link href="/feed">
               <Button variant="outline" size="sm" className="rounded-full">
-                Jelajahi Pengakuan Terbaru
+                Explore Recent Confessions
               </Button>
             </Link>
           }

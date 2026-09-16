@@ -56,13 +56,13 @@ export function CategoryPills({
 
   return (
     <div
-      aria-label="Filter kategori pengakuan"
+      aria-label="Confession category filters"
       className={cn(
         'flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 text-xs select-none',
         className,
       )}
     >
-      {/* "Semua" pill */}
+      {/* "All" pill */}
       <Link
         href={getHref()}
         aria-current={!activeCategory ? 'true' : undefined}
@@ -74,7 +74,7 @@ export function CategoryPills({
         )}
       >
         <Sparkles className="h-3 w-3" aria-hidden="true" />
-        <span>Semua</span>
+        <span>All</span>
       </Link>
 
       {CATEGORIES.map((c) => {

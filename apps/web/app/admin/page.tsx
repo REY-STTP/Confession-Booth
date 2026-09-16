@@ -22,12 +22,11 @@ export default function AdminPage() {
     (async () => {
       try {
         const res = await fetch(`${API_URL}/api/health/chain`, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`Status health rantai: ${res.status}`);
+        if (!res.ok) throw new Error(`Chain health status: ${res.status}`);
         const body = await res.json();
         if (!cancelled) setChain(body);
       } catch (e) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : 'Pemeriksaan kesehatan rantai gagal.');
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Chain health check failed.');
       }
       if (state === 'booth' && accessToken) {
         try {
@@ -37,7 +36,7 @@ export default function AdminPage() {
             if (!cancelled) setQueueCount((b.items ?? []).length);
           }
         } catch {
-          // non-fatal untuk admin view
+          // non-fatal for admin view
         }
       }
     })();
@@ -53,11 +52,12 @@ export default function AdminPage() {
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5 text-primary" />
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Dasbor Administrasi Sistem
+            System Administration Dashboard
           </h1>
         </div>
         <p className="text-xs sm:text-sm text-muted-foreground">
-          Konfigurasi infrastruktur, pemantauan jaringan blockchain, dan verifikasi versi kebijakan.
+          Infrastructure configuration, blockchain network monitoring, and policy version
+          verification.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export default function AdminPage() {
             <div className="flex items-center gap-2">
               <Cpu className="h-4 w-4 text-primary" />
               <h2 className="text-sm sm:text-base font-semibold text-foreground">
-                Kesehatan Blockchain (Chain Health)
+                Blockchain Health (Chain Health)
               </h2>
             </div>
             <Badge variant="outline" className="font-mono text-[10px]">
@@ -94,22 +94,22 @@ export default function AdminPage() {
           ) : (
             <div className="rounded-xl border border-border/60 bg-background/50 p-3.5 text-xs space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Chain ID Terkonfigurasi:</span>
+                <span className="text-muted-foreground">Configured Chain ID:</span>
                 <span className="font-mono font-medium text-foreground">
                   {chain.chainId ?? '11155111'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Status Smart Contract:</span>
+                <span className="text-muted-foreground">Smart Contract Status:</span>
                 <span className="font-mono text-emerald-400 font-medium">
-                  {chain.contractConfigured ? '● Terkonfigurasi & Aktif' : '○ Belum di-set'}
+                  {chain.contractConfigured ? '● Configured & Active' : '○ Not set'}
                 </span>
               </div>
               {queueCount !== null ? (
                 <div className="flex items-center justify-between pt-1 border-t border-border/40">
-                  <span className="text-muted-foreground">Laporan Terbuka (OPEN):</span>
+                  <span className="text-muted-foreground">Open Reports (OPEN):</span>
                   <span className="font-mono font-semibold text-foreground">
-                    {queueCount} laporan
+                    {queueCount} reports
                   </span>
                 </div>
               ) : null}
@@ -123,10 +123,10 @@ export default function AdminPage() {
             <div className="flex items-center gap-2">
               <Database className="h-4 w-4 text-primary" />
               <h2 className="text-sm sm:text-base font-semibold text-foreground">
-                Kategori Emosi Terdaftar ({CATEGORIES.length})
+                Registered Emotion Categories ({CATEGORIES.length})
               </h2>
             </div>
-            <span className="text-xs text-muted-foreground font-mono">Semua Aktif</span>
+            <span className="text-xs text-muted-foreground font-mono">All Active</span>
           </div>
 
           <div className="flex flex-wrap gap-1.5 pt-1">
@@ -141,7 +141,7 @@ export default function AdminPage() {
             ))}
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
-            Pengaturan urutan kategori dan aktivasi dikelola melalui basis data backend.
+            Category order and activation settings are managed via the backend database.
           </p>
         </div>
 
@@ -150,18 +150,18 @@ export default function AdminPage() {
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
             <h2 className="text-sm sm:text-base font-semibold text-foreground">
-              Versi Kebijakan Komunitas (Policy Versions)
+              Community Policy Versions
             </h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="rounded-xl border border-border/60 bg-background/50 p-3 space-y-1">
               <span className="text-muted-foreground">Community Guidelines:</span>
-              <p className="font-mono font-semibold text-foreground">Versi 1.0 (Aktif)</p>
+              <p className="font-mono font-semibold text-foreground">Version 1.0 (Active)</p>
             </div>
             <div className="rounded-xl border border-border/60 bg-background/50 p-3 space-y-1">
               <span className="text-muted-foreground">Privacy Policy:</span>
-              <p className="font-mono font-semibold text-foreground">Versi 1.0 (Aktif)</p>
+              <p className="font-mono font-semibold text-foreground">Version 1.0 (Active)</p>
             </div>
           </div>
         </div>

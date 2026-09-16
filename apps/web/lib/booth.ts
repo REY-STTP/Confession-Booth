@@ -48,25 +48,25 @@ export const BADGE_META: Record<
   EMPATHETIC_LISTENER: {
     label: 'Empathetic Listener',
     icon: 'heart-handshake',
-    desc: 'Memberikan empati dan reaksi pengertian kepada sesama',
+    desc: 'Offer empathy and understanding reactions to fellow souls',
     color: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
   },
   MIDNIGHT_SOUL: {
     label: 'Midnight Soul',
     icon: 'moon',
-    desc: 'Mencurahkan isi hati di keheningan larut malam (00:00 - 04:00)',
+    desc: 'Pour your heart out in the silence of late night (00:00 - 04:00)',
     color: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
   },
   CHAIN_WEAVER: {
     label: 'Chain Weaver',
     icon: 'link',
-    desc: 'Menyambung utas percakapan anonim dalam confession chains',
+    desc: 'Connect anonymous dialogues in confession threads',
     color: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
   },
   STEALTH_CONFESSOR: {
     label: 'Stealth Confessor',
     icon: 'shield-check',
-    desc: 'Berbagi rahasia murni dengan Zero-Knowledge cryptographic stealth',
+    desc: 'Share untraceable truths with Zero-Knowledge cryptographic stealth',
     color: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300',
   },
 };
@@ -104,7 +104,7 @@ const FALLBACK: FeedItem[] = [
     publicId: 'mock-1',
     author: { displayName: 'Anonymous #4821' },
     category: 'heartbreak',
-    content: 'Sudah tiga tahun tapi tiap dengar lagu itu aku masih menepi sebentar.',
+    content: 'It has been three years, but every time that song plays, I still pause for a moment.',
     createdAt: new Date().toISOString(),
     reactions: { understand: 128, love: 31, sad: 72 },
     whisperCount: 21,
@@ -114,7 +114,7 @@ const FALLBACK: FeedItem[] = [
     publicId: 'mock-2',
     author: { displayName: 'Anonymous #1173' },
     category: 'love',
-    content: 'Aku bilang tidak apa-apa waktu dia pergi. Ternyata aku hanya belum selesai sayang.',
+    content: 'I told them I was fine when they left. Turns out I just was not ready to let go.',
     createdAt: new Date().toISOString(),
     reactions: { understand: 40, love: 90, sad: 12 },
     whisperCount: 8,
@@ -124,7 +124,7 @@ const FALLBACK: FeedItem[] = [
     publicId: 'mock-3',
     author: { displayName: 'Anonymous #9021' },
     category: 'midnight',
-    content: 'Jam 2 pagi dan aku masih memikirkan percakapan 4 tahun lalu.',
+    content: '2 AM and I am still thinking about a conversation from four years ago.',
     createdAt: new Date().toISOString(),
     reactions: { understand: 77, love: 5, sad: 30 },
     whisperCount: 15,
@@ -211,46 +211,46 @@ export async function getRooms(): Promise<RoomItem[]> {
     return [
       {
         slug: 'campus-life',
-        name: 'Kampus & Kuliah',
-        description: 'Rahasia seputar perkuliahan, tugas akhir, dan pertemanan kampus.',
+        name: 'Campus & Academy',
+        description: 'Secrets surrounding university life, final theses, and campus friendships.',
         icon: 'graduation-cap',
-        rules: 'Hargai sesama mahasiswa; dilarang doxxing.',
+        rules: 'Respect fellow students; no doxxing.',
         sortOrder: 1,
         confessionCount: 0,
       },
       {
         slug: 'workplace-burnout',
         name: 'Work & Career',
-        description: 'Tekanan deadline, imposter syndrome, toxic office, dan gaji.',
+        description: 'Deadline pressure, imposter syndrome, toxic workplaces, and compensation.',
         icon: 'briefcase',
-        rules: 'Dilarang mencantumkan nama spesifik perusahaan/kolega.',
+        rules: 'Do not name specific companies or colleagues.',
         sortOrder: 2,
         confessionCount: 0,
       },
       {
         slug: 'unsent-letters',
-        name: 'Surat Tak Terkirim',
-        description: 'Pesan, rindu, dan kata-kata yang tak sempat terucap.',
+        name: 'Unsent Letters',
+        description: 'Messages, longings, and words left forever unspoken.',
         icon: 'mail',
-        rules: 'Tuliskan perasaan dengan jujur; jaga kerahasiaan identitas.',
+        rules: 'Write with honest emotion; preserve identity privacy.',
         sortOrder: 3,
         confessionCount: 0,
       },
       {
         slug: 'deep-existential',
-        name: 'Eksistensial & Makna',
-        description: 'Pemikiran mendalam, arti hidup, filosofi, dan renungan sunyi.',
+        name: 'Existential & Meaning',
+        description: 'Deep thoughts, purpose of life, philosophy, and quiet reflections.',
         icon: 'compass',
-        rules: 'Ruang refleksi bebas stigma untuk pertanyaan terbesar hidup.',
+        rules: 'Stigma-free reflection space for life’s deepest questions.',
         sortOrder: 4,
         confessionCount: 0,
       },
       {
         slug: 'midnight-thoughts',
         name: 'Midnight Sanctuary',
-        description: 'Pelarian pikiran larut malam (00:00 - 04:00) saat dunia tertidur.',
+        description: 'Late-night thoughts (00:00 - 04:00) while the rest of the world sleeps.',
         icon: 'moon',
-        rules: 'Ekspresikan isi hatimu dengan tenang di keheningan malam.',
+        rules: 'Express your heart softly in the stillness of the night.',
         sortOrder: 5,
         confessionCount: 0,
       },
@@ -297,8 +297,8 @@ export async function getWhispers(publicId: string): Promise<WhisperItem[]> {
 
 export function timeAgo(iso: string): string {
   const mins = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 60) return `${mins}m lalu`;
+  if (mins < 60) return `${mins}m ago`;
   const h = Math.round(mins / 60);
-  if (h < 24) return `${h}j lalu`;
-  return `${Math.round(h / 24)}h lalu`;
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }

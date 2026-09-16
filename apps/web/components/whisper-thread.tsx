@@ -57,7 +57,7 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
                   <TooltipContent side="top">
                     <p className="font-semibold text-primary">Original Poster</p>
                     <p className="text-[11px] text-muted-foreground">
-                      Penulis asli dari confession ini.
+                      The original author of this confession.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -107,13 +107,13 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
               className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors text-xs font-medium"
             >
               <Reply className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Balas di rantai ini</span>
+              <span>Reply to this thread</span>
             </button>
 
             {replies.length > 0 ? (
               <span className="font-mono text-[11px] text-muted-foreground flex items-center gap-1">
                 <MessageSquare className="h-3 w-3 opacity-60" aria-hidden="true" />
-                <span>{replies.length} balasan</span>
+                <span>{replies.length} replies</span>
               </span>
             ) : null}
           </div>
@@ -132,7 +132,7 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
       <div className={cn('space-y-3', className)}>
         {whispers.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border/70 bg-card/30 p-8 text-center text-xs sm:text-sm text-muted-foreground">
-            <p>Belum ada bisikan. Jadilah yang pertama memulai utas diskusi anonim ini.</p>
+            <p>No whispers yet. Be the first to start this anonymous discussion.</p>
           </div>
         ) : (
           rootWhispers.map((w) => renderNode(w))

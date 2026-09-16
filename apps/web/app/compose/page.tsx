@@ -12,19 +12,19 @@ export default function ComposePage() {
         <Info className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" aria-hidden="true" />
         <div className="space-y-1">
           <p className="leading-relaxed">
-            Dengan menekan <strong>Confess</strong>, Anda memahami bahwa konten bersifat publik
-            dalam suaka, moderasi dapat menyembunyikan konten yang melanggar, dan publikasi on-chain
-            bersifat historis tanpa identitas pribadi.
+            By pressing <strong>Confess</strong>, you understand that confessions are publicly
+            visible within the sanctuary, moderation may hide violating content, and on-chain
+            records are historical without personal identities.
           </p>
           <div className="flex items-center gap-3 pt-1">
             <Link href="/guidelines" className="text-primary hover:underline font-medium">
-              Panduan Komunitas (Guidelines) →
+              Community Guidelines →
             </Link>
             <Link
               href="/privacy"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              Kebijakan Privasi & Kriptografi
+              Privacy &amp; Cryptography Policy
             </Link>
           </div>
         </div>

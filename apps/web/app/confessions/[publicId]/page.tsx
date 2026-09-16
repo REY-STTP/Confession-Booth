@@ -91,10 +91,11 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
           });
           if (!cancelled) setWhispers(w.items ?? []);
         } catch {
-          if (!cancelled) setLoadError('Whisper gagal dimuat. Coba muat ulang.');
+          if (!cancelled) setLoadError('Whispers failed to load. Please refresh.');
         }
       } catch {
-        if (!cancelled) setLoadError('Confession gagal dimuat. Cek koneksi/API.');
+        if (!cancelled)
+          setLoadError('Confession failed to load. Check your network or API connection.');
       }
     })();
     return () => {
@@ -114,8 +115,8 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
 
   async function react(type: string) {
     if (state !== 'booth' || !accessToken) {
-      toast.error('Masuk booth dulu', {
-        description: 'Hubungkan wallet Anda untuk memberikan reaksi pada pengakuan.',
+      toast.error('Enter booth first', {
+        description: 'Connect your wallet to react to confessions.',
       });
       return;
     }
@@ -138,26 +139,18 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
 
     try {
       const res = on
-        ? await apiFetch(
-            `/api/confessions/${encodeURIComponent(publicId)}/reactions`,
-            accessToken,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ type }),
-            },
-          )
-        : await apiFetch(
-            `/api/confessions/${encodeURIComponent(publicId)}/reactions/${encodeURIComponent(type)}`,
-            accessToken,
-            {
-              method: 'DELETE',
-            },
-          );
+        ? await apiFetch(`/api/confessions/${publicId}/reactions`, accessToken, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reaction: key }),
+          })
+        : await apiFetch(`/api/confessions/${publicId}/reactions/${key}`, accessToken, {
+            method: 'DELETE',
+          });
 
       if (!res.ok) throw new Error(`react failed: ${res.status}`);
     } catch {
-      // Revert rollback bila gagal
+      // Rollback jika request gagal
       setReacted((s) => ({ ...s, [type]: !on }));
       setItem((prev) => {
         if (!prev) return prev;
@@ -170,7 +163,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
           },
         };
       });
-      toast.error('Gagal memperbarui reaksi');
+      toast.error('Failed to update reaction');
     }
   }
 
@@ -179,10 +172,10 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
       const url = window.location.href;
       await navigator.clipboard.writeText(url);
       setCopiedLink(true);
-      toast.success('Tautan confession berhasil disalin!');
+      toast.success('Confession link copied to clipboard!');
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
-      toast.error('Gagal menyalin tautan');
+      toast.error('Failed to copy link');
     }
   }
 
@@ -190,16 +183,16 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
     e.preventDefault();
     if (!whisper.trim()) return;
     if (whisper.length > 300) {
-      toast.error('Whisper maksimal 300 karakter');
+      toast.error('Whispers must be at most 300 characters');
       return;
     }
     if (/<[a-zA-Z/!]/.test(whisper)) {
-      toast.error('HTML tidak diizinkan di whisper');
+      toast.error('HTML is not allowed in whispers');
       return;
     }
     if (state !== 'booth' || !accessToken) {
-      toast.error('Masuk booth dulu', {
-        description: 'Hubungkan wallet Anda untuk mengirim bisikan anonim.',
+      toast.error('Enter booth first', {
+        description: 'Connect your wallet to send anonymous whispers.',
       });
       return;
     }
@@ -235,9 +228,9 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
       setWhispers((w) => [...w, newWhisper]);
       setWhisper('');
       setReplyTo(null);
-      toast.success('Bisikan anonim terkirim!');
+      toast.success('Anonymous whisper sent!');
     } catch {
-      toast.error('Whisper gagal terkirim. Coba lagi.');
+      toast.error('Failed to send whisper. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -252,7 +245,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
         <p className="font-semibold text-base">{loadError}</p>
         <Link href="/feed" className="mt-4 inline-block">
           <Button variant="outline" size="sm">
-            Kembali ke Feed
+            Back to Feed
           </Button>
         </Link>
       </div>
@@ -284,7 +277,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
           className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Kembali ke Feed</span>
+          <span>Back to Feed</span>
         </Link>
       </div>
 
@@ -297,7 +290,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
       {/* Reaction & Action Controls Bar */}
       <div
         className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-card/60 p-2.5 sm:p-3 backdrop-blur-sm"
-        aria-label="Beri reaksi dan aksi"
+        aria-label="Reactions and actions"
       >
         <div className="flex flex-wrap items-center gap-1.5 flex-1">
           {REACTION_BUTTONS.map(({ type: t, label }) => {
@@ -309,7 +302,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                 key={t}
                 onClick={() => react(t)}
                 aria-pressed={isPressed}
-                aria-label={`Beri reaksi ${label}`}
+                aria-label={`React ${label}`}
                 className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 border select-none outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   isPressed
                     ? 'border-primary/50 bg-primary/15 text-primary shadow-xs'
@@ -338,12 +331,12 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
             {copiedLink ? (
               <>
                 <Check className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Tersalin</span>
+                <span>Copied</span>
               </>
             ) : (
               <>
                 <Share2 className="h-3.5 w-3.5" />
-                <span>Bagikan</span>
+                <span>Share</span>
               </>
             )}
           </Button>
@@ -356,7 +349,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
             className="rounded-full gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           >
             <Flag className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Laporkan</span>
+            <span className="hidden sm:inline">Report</span>
           </Button>
         </div>
       </div>
@@ -370,17 +363,17 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
               Confession Chains ({whispers.length})
             </h2>
           </div>
-          <span className="text-xs text-muted-foreground">Diskusi anonim & aman</span>
+          <span className="text-xs text-muted-foreground">Safe &amp; anonymous discussion</span>
         </div>
 
-        {/* Form Kirim Whisper */}
+        {/* Whisper Reply Form */}
         <div className="rounded-xl border border-border/80 bg-card/80 p-4 space-y-3 shadow-sm">
           {replyTo ? (
             <div className="flex items-center justify-between rounded-lg bg-primary/10 border border-primary/30 px-3 py-1.5 text-xs text-primary">
               <span className="flex items-center gap-1.5">
                 <CornerDownRight className="h-3.5 w-3.5" />
                 <span>
-                  Membalas <strong>{replyTo.author}</strong> (Menyambung rantai percakapan)
+                  Replying to <strong>{replyTo.author}</strong> (Continuing conversation chain)
                 </span>
               </span>
               <button
@@ -389,7 +382,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                 className="inline-flex items-center gap-1 font-semibold ml-2 hover:underline text-foreground"
               >
                 <X className="h-3 w-3" />
-                <span>Batal</span>
+                <span>Cancel</span>
               </button>
             </div>
           ) : null}
@@ -402,12 +395,12 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                 onChange={(e) => setWhisper(e.target.value)}
                 placeholder={
                   replyTo
-                    ? `Balas ${replyTo.author} secara anonim...`
-                    : 'Kirim whisper anonim ke pengakuan ini...'
+                    ? `Reply to ${replyTo.author} anonymously...`
+                    : 'Send an anonymous whisper to this confession...'
                 }
                 maxLength={300}
                 className="flex-1 rounded-xl border border-border/80 bg-background/80 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                aria-label="Tulis bisikan"
+                aria-label="Write a whisper"
               />
               <Button
                 type="submit"
@@ -419,7 +412,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                 ) : (
                   <>
                     <Send className="h-3.5 w-3.5" />
-                    <span>{replyTo ? 'Balas' : 'Kirim'}</span>
+                    <span>{replyTo ? 'Reply' : 'Send'}</span>
                   </>
                 )}
               </Button>
@@ -430,7 +423,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
               {/* Badge picker */}
               {userBadges.length > 0 ? (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-muted-foreground text-[11px]">Gunakan lencana:</span>
+                  <span className="text-muted-foreground text-[11px]">Attach badge:</span>
                   <button
                     type="button"
                     onClick={() => setSelectedBadge('')}
@@ -440,7 +433,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                         : 'border-border text-muted-foreground hover:border-border/80'
                     }`}
                   >
-                    Polos
+                    None
                   </button>
                   {userBadges.map((b) => {
                     const meta = BADGE_META[b.type];
@@ -465,7 +458,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                 </div>
               ) : (
                 <span className="text-[11px] text-muted-foreground">
-                  Semua bisikan dikirim secara anonim tanpa identitas wallet.
+                  All whispers are sent anonymously without wallet identities.
                 </span>
               )}
 

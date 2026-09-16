@@ -2,7 +2,7 @@
   "name": "confession-booth",
   "version": "0.1.0",
   "private": true,
-  "description": "Confession Booth (UNSAID) — anonymous confession feed. Identity is optional; expression is the product.",
+  "description": "Confession Booth — anonymous confession feed. Identity is optional; expression is the product.",
   "workspaces": [
     "apps/*",
     "packages/*",

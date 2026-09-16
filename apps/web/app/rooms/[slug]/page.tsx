@@ -64,7 +64,7 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors font-medium"
         >
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Kembali ke Semua Kamar</span>
+          <span>Back to All Rooms</span>
         </Link>
       </div>
 
@@ -100,7 +100,7 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
             >
               <Button size="sm" className="rounded-full gap-1.5 font-medium shadow-xs">
                 <PenLine className="h-3.5 w-3.5" />
-                <span>Buat Pengakuan</span>
+                <span>Write Confession</span>
               </Button>
             </Link>
           </div>
@@ -109,7 +109,7 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
             <div className="rounded-xl border border-border/70 bg-background/50 p-3 text-xs text-muted-foreground flex items-start gap-2">
               <BookOpen className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
               <div>
-                <strong className="text-foreground font-semibold">Pedoman Kamar: </strong>
+                <strong className="text-foreground font-semibold">Room Guidelines: </strong>
                 <span>{room.rules}</span>
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
       <div className="flex items-center justify-between border-b border-border/40 pb-3">
         <div className="flex items-center gap-1.5">
           {[
-            { id: 'new', label: 'Terbaru', icon: Sparkles },
+            { id: 'new', label: 'New', icon: Sparkles },
             { id: 'trending', label: 'Trending', icon: TrendingUp },
             { id: 'relatable', label: 'Relatable', icon: Flame },
           ].map((tab) => {
@@ -149,7 +149,7 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
             );
           })}
         </div>
-        <span className="font-mono text-xs text-muted-foreground">{items.length} pengakuan</span>
+        <span className="font-mono text-xs text-muted-foreground">{items.length} confessions</span>
       </div>
 
       {/* Confession Feed */}
@@ -157,13 +157,13 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
         <SkeletonList count={3} />
       ) : items.length === 0 ? (
         <Empty
-          title="Belum ada pengakuan di kamar ini"
-          sub="Jadilah yang pertama mencurahkan isi hatimu di ruang aman ini."
+          title="No confessions in this room yet"
+          sub="Be the first to share your truth in this safe haven."
           action={
             <Link href="/compose">
               <Button size="sm" className="rounded-full gap-1.5">
                 <PenLine className="h-3.5 w-3.5" />
-                <span>Tulis Pengakuan Pertama</span>
+                <span>Write the First Confession</span>
               </Button>
             </Link>
           }

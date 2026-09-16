@@ -29,13 +29,13 @@ export default function PrivacyPage() {
           <div className="flex items-center gap-2">
             <EyeOff className="h-4 w-4 text-primary" />
             <h2 className="text-base font-semibold text-foreground tracking-tight">
-              1. Tanpa Profil Publik atau Pelacakan Pihak Ketiga
+              1. No Public Profiles or Third-Party Tracking
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Confession Booth dirancang secara fundamental agar setiap orang dapat berekspresi tanpa
-            keharusan mengekspos profil publik. Feed kami tidak menampilkan alamat dompet (wallet
-            address), pengenal internal terpusat, alamat IP pengguna, atau catatan rahasia apa pun.
+            Confession Booth is fundamentally engineered so anyone can express themselves without
+            exposing a public identity. Our feed does not disclose wallet addresses, centralized
+            user IDs, user IP addresses, or covert telemetry logs.
           </p>
         </section>
 
@@ -44,15 +44,16 @@ export default function PrivacyPage() {
           <div className="flex items-center gap-2">
             <Lock className="h-4 w-4 text-emerald-400" />
             <h2 className="text-base font-semibold text-foreground tracking-tight">
-              2. Kriptografi Zero-Knowledge (ZK Stealth)
+              2. Zero-Knowledge Cryptography (ZK Stealth)
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Pada mode ZK Stealth, bukti keanggotaan digenerate secara lokal di dalam browser Anda
-            menggunakan algoritma cryptographic Merkle Proof dan Epoch Nullifier. Paket data
-            dikirimkan ke server backend <strong>tanpa header otentikasi atau token sesi</strong>,
-            sehingga secara matematis mustahil bagi server untuk mengaitkan pengakuan tersebut
-            dengan alamat wallet pengirim.
+            In ZK Stealth mode, membership proofs are generated locally within your browser using
+            cryptographic Merkle Proof and Epoch Nullifier algorithms. The submission payload is
+            transmitted to the backend server{' '}
+            <strong>without authentication headers or session tokens</strong>, making it
+            mathematically impossible for the server to correlate the confession with the
+            author&rsquo;s wallet address.
           </p>
         </section>
 
@@ -61,17 +62,17 @@ export default function PrivacyPage() {
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400" />
             <h2 className="text-base font-semibold text-foreground tracking-tight">
-              3. Kejujuran Mengenai Batas Anonimitas
+              3. Honest Privacy Boundaries
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Kami <strong>tidak pernah menjanjikan anonimitas sempurna</strong>. Riwayat transaksi
-            blockchain, metadata RPC/jaringan, dan perilakumu sendiri masih bisa menjadi sumber
-            korelasi.
+            We <strong>never promise absolute or magical anonymity</strong>. Blockchain transaction
+            histories, RPC/network metadata, and behavioral patterns can still create correlation
+            risks.
           </p>
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            <strong>Peringatan Penting:</strong> Jangan tulis nama, alamat, nomor telepon, atau
-            detail unik yang mudah mengidentifikasimu.
+            <strong>Important Warning:</strong> Never write names, locations, phone numbers, or
+            unique details that could easily identify you or someone else.
           </div>
         </section>
 
@@ -80,14 +81,14 @@ export default function PrivacyPage() {
           <div className="flex items-center gap-2">
             <Database className="h-4 w-4 text-primary" />
             <h2 className="text-base font-semibold text-foreground tracking-tight">
-              4. Sifat Historis Blockchain
+              4. Immutable Blockchain Records
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Setiap pengakuan dicatat dalam bentuk ringkasan kriptografis (SHA-256 Digest) pada
-            blockchain Ethereum Sepolia. Meskipun tim moderasi dapat menyembunyikan konten dari feed
-            aplikasi atas pelanggaran hukum, referensi transaksi blockchain yang telah diterbitkan
-            bersifat historis dan tidak dapat dihapus secara retroaktif.
+            Every confession is permanently anchored via canonical cryptographic digest (SHA-256) on
+            the Ethereum Sepolia network. While the moderation team can quarantine violations from
+            the public app feed, published blockchain transaction hashes are permanent and cannot be
+            retroactively erased.
           </p>
         </section>
       </div>
@@ -95,7 +96,7 @@ export default function PrivacyPage() {
       <div className="pt-2 flex items-center justify-between">
         <Link href="/feed">
           <Button variant="outline" size="sm" className="rounded-full">
-            ← Kembali ke Feed
+            ← Back to Feed
           </Button>
         </Link>
         <Link href="/guidelines">
@@ -104,7 +105,7 @@ export default function PrivacyPage() {
             size="sm"
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            Panduan Komunitas (Guidelines) →
+            Community Guidelines →
           </Button>
         </Link>
       </div>

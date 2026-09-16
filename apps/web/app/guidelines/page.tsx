@@ -5,33 +5,36 @@ import { Button } from '@/components/ui/button';
 
 const FORBIDDEN_ITEMS = [
   {
-    title: 'Ancaman Kredibel',
-    desc: 'Ancaman kekerasan atau bahaya fisik terhadap individu atau kelompok.',
+    title: 'Credible Threats',
+    desc: 'Threats of violence or physical harm against individuals or groups.',
   },
   {
-    title: 'Pelecehan Tertarget',
-    desc: 'Perundungan berulang, intimidasi, atau penghinaan yang ditujukan secara spesifik.',
+    title: 'Targeted Harassment',
+    desc: 'Repeated bullying, intimidation, or targeted harassment.',
   },
   {
-    title: 'Doxxing & Data Pribadi',
-    desc: 'Menyebarkan nama lengkap, nomor telepon, alamat rumah, atau data rahasia orang lain.',
+    title: 'Doxxing & Private Data',
+    desc: 'Disclosing full names, phone numbers, home addresses, or confidential personal data.',
   },
   {
-    title: 'Kredensial / Akun',
-    desc: 'Membagikan password, private key, token autentikasi, atau akses ilegal.',
+    title: 'Credentials & Keys',
+    desc: 'Sharing passwords, private keys, authentication tokens, or unauthorized access credentials.',
   },
   {
-    title: 'Eksploitasi Anak',
-    desc: 'Segala bentuk konten yang melibatkan bahaya atau eksploitasi anak (Nol toleransi).',
+    title: 'Child Exploitation',
+    desc: 'Any form of material involving harm or exploitation of minors (Zero tolerance).',
   },
   {
-    title: 'Instruksi Kejahatan',
-    desc: 'Panduan atau tutorial untuk melakukan tindak kriminal dan kekerasan.',
+    title: 'Instructions for Crime',
+    desc: 'Guides or instructions facilitating criminal acts and violence.',
   },
-  { title: 'Malware & Phishing', desc: 'Tautan berbahaya atau manipulasi rekayasa sosial.' },
   {
-    title: 'Spam & Otomasi Liar',
-    desc: 'Flooding pesan berulang, iklan komersial ilegal, atau bot manipulatif.',
+    title: 'Malware & Phishing',
+    desc: 'Malicious links, scam domains, or social engineering manipulation.',
+  },
+  {
+    title: 'Spam & Malicious Automation',
+    desc: 'Flooding repetitive messages, commercial promotions, or manipulative bots.',
   },
 ];
 
@@ -50,42 +53,40 @@ export default function GuidelinesPage() {
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Panduan komunitas untuk menjaga kesakralan, ketenangan, dan rasa aman bagi setiap jiwa
-          yang berbagi di suaka pengakuan ini.
+          Community standards designed to preserve the peace, sanctity, and emotional safety of
+          every soul sharing in this confession sanctuary.
         </p>
       </div>
 
       {/* Philosophy */}
       <section className="rounded-2xl border border-border/80 bg-card/80 p-6 space-y-3 shadow-sm">
         <h2 className="text-base font-semibold text-foreground tracking-tight">
-          1. Filosofi Suaka Anonim
+          1. Sanctuary Philosophy
         </h2>
         <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-          Anonimitas sejati diciptakan agar manusia dapat jujur terhadap dirinya sendiri tanpa takut
-          dipermalukan atau dihakimi secara sosial. Namun,{' '}
-          <strong>anonimitas bukanlah ketiadaan konsekuensi</strong>. Hak bersuara Anda berakhir
-          ketika suara tersebut digunakan untuk mencelakakan sesama.
+          True anonymity exists so people can be honest with themselves without fear of social ruin
+          or public judgment. However,{' '}
+          <strong>anonymity is not the absence of accountability</strong>. Your freedom of
+          expression ends when words are weaponized to inflict real-world harm on others.
         </p>
       </section>
 
       {/* Content Limits */}
       <section className="rounded-2xl border border-border/80 bg-card/80 p-6 space-y-3 shadow-sm">
         <h2 className="text-base font-semibold text-foreground tracking-tight">
-          2. Batas Teknis Pengakuan
+          2. Technical Constraints
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
           <div className="rounded-xl border border-border/60 bg-background/50 p-3.5 space-y-1">
-            <span className="font-semibold text-foreground block">
-              Pengakuan Utama (Confession)
-            </span>
+            <span className="font-semibold text-foreground block">Primary Confession</span>
             <p className="text-muted-foreground">
-              Maksimal 500 karakter, teks biasa (plaintext), satu kategori emosi utama.
+              Maximum 500 characters, plaintext only, single primary emotion tag.
             </p>
           </div>
           <div className="rounded-xl border border-border/60 bg-background/50 p-3.5 space-y-1">
-            <span className="font-semibold text-foreground block">Bisikan Rantai (Whisper)</span>
+            <span className="font-semibold text-foreground block">Thread Whisper</span>
             <p className="text-muted-foreground">
-              Maksimal 300 karakter, teks biasa, dapat merespons pengakuan atau whisper lain.
+              Maximum 300 characters, plaintext only, replies to a confession or another whisper.
             </p>
           </div>
         </div>
@@ -96,7 +97,7 @@ export default function GuidelinesPage() {
         <div className="flex items-center gap-2">
           <ShieldAlert className="h-4 w-4 text-destructive" />
           <h2 className="text-base font-semibold text-foreground tracking-tight">
-            3. Pelanggaran yang Dilarang Keras
+            3. Strictly Prohibited Content
           </h2>
         </div>
 
@@ -119,22 +120,22 @@ export default function GuidelinesPage() {
       {/* Moderation Workflow */}
       <section className="rounded-2xl border border-border/80 bg-card/80 p-6 space-y-4 shadow-sm">
         <h2 className="text-base font-semibold text-foreground tracking-tight">
-          4. Alur Penegakan Moderasi Transparan
+          4. Transparent Moderation Workflow
         </h2>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 text-xs text-muted-foreground">
           <div className="rounded-lg border border-border/60 bg-background/60 p-2.5 text-center flex-1">
-            <span className="font-semibold text-foreground block">1. Laporan Komunitas</span>
-            <span>Pelaporan via tombol Report</span>
+            <span className="font-semibold text-foreground block">1. Community Reports</span>
+            <span>Flagged via the Report button</span>
           </div>
           <ArrowRight className="h-4 w-4 mx-auto hidden sm:block opacity-40" />
           <div className="rounded-lg border border-border/60 bg-background/60 p-2.5 text-center flex-1">
-            <span className="font-semibold text-foreground block">2. Triage & Karantina</span>
-            <span>Deteksi prioritas instan</span>
+            <span className="font-semibold text-foreground block">2. Triage &amp; Quarantine</span>
+            <span>Priority triage &amp; immediate hide</span>
           </div>
           <ArrowRight className="h-4 w-4 mx-auto hidden sm:block opacity-40" />
           <div className="rounded-lg border border-border/60 bg-background/60 p-2.5 text-center flex-1">
-            <span className="font-semibold text-foreground block">3. Audit Log Terbuka</span>
-            <span>Aksi dicatat tanpa doxxing</span>
+            <span className="font-semibold text-foreground block">3. Open Audit Log</span>
+            <span>Actions recorded without doxxing</span>
           </div>
         </div>
       </section>
@@ -142,7 +143,7 @@ export default function GuidelinesPage() {
       <div className="pt-2 flex items-center justify-between">
         <Link href="/feed">
           <Button variant="outline" size="sm" className="rounded-full">
-            ← Kembali ke Feed
+            ← Back to Feed
           </Button>
         </Link>
         <Link href="/privacy">
@@ -151,7 +152,7 @@ export default function GuidelinesPage() {
             size="sm"
             className="text-xs text-muted-foreground hover:text-foreground"
           >
-            Kebijakan Privasi & Kriptografi →
+            Privacy &amp; Cryptography Policy →
           </Button>
         </Link>
       </div>

@@ -12,7 +12,7 @@ interface FeedTabsProps {
 const TABS = [
   {
     href: '/feed',
-    label: 'Terbaru',
+    label: 'Recent',
     sublabel: 'New',
     icon: Sparkles,
   },
@@ -41,7 +41,7 @@ export function FeedTabs({ className }: FeedTabsProps) {
 
   return (
     <nav
-      aria-label="Navigasi kategori feed"
+      aria-label="Feed category navigation"
       className={cn(
         'flex items-center gap-1 overflow-x-auto no-scrollbar rounded-xl border border-border/70 bg-card/60 p-1 backdrop-blur-sm shadow-sm',
         className,

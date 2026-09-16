@@ -10,7 +10,7 @@ export default function Landing() {
       {/* Hero Section */}
       <section
         className="relative overflow-hidden rounded-3xl border border-border/80 bg-gradient-to-b from-card via-card/90 to-background/60 p-8 sm:p-14 text-center shadow-lg backdrop-blur-md"
-        aria-label="Hero Suaka Pengakuan"
+        aria-label="Confession Sanctuary Hero"
       >
         {/* Breathing Ambient Glow */}
         <div
@@ -29,8 +29,8 @@ export default function Landing() {
           </h1>
 
           <p className="mt-4 text-base sm:text-lg text-muted-foreground max-w-xl leading-relaxed">
-            Suaka digital terenkripsi untuk rahasia, penyesalan, dan rasa yang tak pernah terucap.
-            Tanpa nama. Tanpa profil. Tanpa penghakiman.
+            An encrypted digital sanctuary for secrets, regrets, and unspoken truths. No names. No
+            profiles. No judgment.
           </p>
 
           {/* Action CTAs */}
@@ -52,7 +52,7 @@ export default function Landing() {
                 className="w-full sm:w-auto rounded-full px-7 py-6 text-sm sm:text-base font-medium border-border/80 bg-card/60 hover:bg-muted/50 gap-2"
               >
                 <PenLine className="h-4 w-4 text-primary" />
-                <span>Tulis Pengakuan</span>
+                <span>Write Confession</span>
               </Button>
             </Link>
           </div>
@@ -62,20 +62,20 @@ export default function Landing() {
             metadata can still create privacy risks — don&rsquo;t include information that could
             identify you.{' '}
             <Link href="/privacy" className="text-primary hover:underline font-medium">
-              Pelajari batas privasi →
+              Learn about privacy boundaries →
             </Link>
           </p>
         </div>
       </section>
 
       {/* How It Works Bento Grid */}
-      <section className="space-y-4" aria-label="Cara Kerja">
+      <section className="space-y-4" aria-label="How It Works">
         <div className="text-center space-y-1">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Tiga Pilar Suaka Pengakuan
+            Three Pillars of the Sanctuary
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Dibangun dengan filosofi privasi radikal dan empati murni.
+            Built upon a philosophy of radical privacy and pure empathy.
           </p>
         </div>
 
@@ -87,11 +87,11 @@ export default function Landing() {
                 <EyeOff className="h-5 w-5" />
               </div>
               <h3 className="font-semibold text-base text-foreground tracking-tight">
-                1. Masuk Tanpa Identitas
+                1. Anonymous Presence
               </h3>
               <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground">
-                Jelajahi seluruh pengakuan publik secara bebas tanpa kewajiban menghubungkan wallet.
-                Tanpa nama, tanpa profil publik, dan tanpa grafik follow.
+                Freely explore all public confessions without connecting a wallet. No handles, no
+                public profiles, and no follower graphs.
               </p>
             </div>
           </div>
@@ -103,11 +103,12 @@ export default function Landing() {
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <h3 className="font-semibold text-base text-foreground tracking-tight">
-                2. ZK Stealth Unlinkable
+                2. ZK Stealth &amp; Unlinkable
               </h3>
               <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground">
-                Tulis hingga 500 karakter dengan Zero-Knowledge cryptographic proof. Permintaan
-                dikirim tanpa token sesi — alamat wallet Anda tidak pernah tercatat di database.
+                Compose up to 500 characters with Zero-Knowledge cryptographic proofs. Submissions
+                are dispatched without session tokens — your wallet address is never recorded in the
+                database.
               </p>
             </div>
           </div>
@@ -119,11 +120,11 @@ export default function Landing() {
                 <Lock className="h-5 w-5" />
               </div>
               <h3 className="font-semibold text-base text-foreground tracking-tight">
-                3. Terverifikasi On-Chain
+                3. On-Chain Verified
               </h3>
               <p className="text-xs sm:text-sm leading-relaxed text-muted-foreground">
-                Setiap pengakuan di-anchor secara permanen pada smart contract Sepolia melalui
-                SHA-256 digest, menjamin keaslian historis tanpa membocorkan identitas penulis.
+                Every confession is permanently anchored to the Sepolia blockchain via SHA-256
+                digest, guaranteeing historical authenticity without disclosing author identity.
               </p>
             </div>
           </div>
@@ -133,34 +134,34 @@ export default function Landing() {
       {/* Atmospheric Sanctuary Reactions & Midnight Highlight */}
       <section
         className="rounded-2xl border border-border/70 bg-card/60 p-6 sm:p-8 space-y-4 backdrop-blur-sm"
-        aria-label="Reaksi dan Jam Malam"
+        aria-label="Reactions and Midnight Archive"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-400" />
-              <span>Bahasa Empati di Booth</span>
+              <span>The Language of Empathy</span>
             </h3>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Bukan tombol like yang menghakimi, melainkan tanda bahwa Anda didengar dan dipahami:
+              Not judgmental like counters, but quiet signals that you are heard and understood:
             </p>
           </div>
 
           <Link href="/midnight">
             <Button variant="outline" size="sm" className="rounded-full gap-1.5 text-xs">
               <Moon className="h-3.5 w-3.5 text-indigo-400" />
-              <span>Midnight Confessions →</span>
+              <span>Midnight Archive →</span>
             </Button>
           </Link>
         </div>
 
         <div className="flex flex-wrap gap-2 pt-2">
           {[
-            ['understand', 'I understand', 'Resonansi pengertian murni'],
-            ['love', 'Sending love', 'Dukungan hangat'],
-            ['sad', 'I feel this', 'Rasa yang sama'],
-            ['wild', 'That’s wild', 'Keterkejutan jujur'],
-            ['funny', 'I shouldn’t laugh', 'Tawa di balik duka'],
+            ['understand', 'I understand', 'Pure understanding & resonance'],
+            ['love', 'Sending love', 'Warm support'],
+            ['sad', 'I feel this', 'Shared sorrow'],
+            ['wild', 'That’s wild', 'Honest disbelief'],
+            ['funny', 'I shouldn’t laugh', 'Dark humor relief'],
           ].map(([key, label, desc]) => (
             <div
               key={label}

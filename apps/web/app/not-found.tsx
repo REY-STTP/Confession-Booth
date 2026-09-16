@@ -14,19 +14,19 @@ export default function NotFound() {
       </div>
 
       <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-        Ruangan Ini Sunyi & Kosong
+        This Sanctuary is Silent &amp; Empty
       </h1>
 
       <p className="mt-2 text-xs sm:text-sm text-muted-foreground max-w-sm leading-relaxed">
-        Halaman yang Anda tuju tidak ditemukan, telah berpindah, atau pengakuan telah disembunyikan
-        oleh tim moderasi.
+        The page you seek could not be found, has moved, or the confession has been secluded by
+        moderation.
       </p>
 
       <div className="mt-6 flex items-center justify-center gap-3">
         <Link href="/feed">
           <Button className="rounded-full gap-2 font-medium px-6">
             <ArrowLeft className="h-4 w-4" />
-            <span>Kembali ke Feed Utama</span>
+            <span>Return to Main Feed</span>
           </Button>
         </Link>
       </div>

@@ -31,10 +31,10 @@ export function BoothCard({ item }: { item: FeedItem }) {
       const url = `${window.location.origin}/confessions/${item.publicId}`;
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success('Tautan confession berhasil disalin');
+      toast.success('Confession link copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('Gagal menyalin tautan');
+      toast.error('Failed to copy link');
     }
   }
 
@@ -42,7 +42,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
     ? (BADGE_META[item.badgeType] ?? {
         label: item.badgeType.replace(/_/g, ' '),
         icon: 'shield-check',
-        desc: 'Lencana komunitas',
+        desc: 'Community badge',
         color: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
       })
     : null;
@@ -52,7 +52,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
       <Card
         className="group relative border-border/75 bg-card/80 transition-all duration-200 hover:border-primary/40 hover:bg-card hover:shadow-card-hover"
         role="article"
-        aria-label={`Confession oleh ${item.author.displayName}`}
+        aria-label={`Confession by ${item.author.displayName}`}
       >
         <CardHeader className="flex flex-row items-start justify-between gap-3 p-4 pb-2 sm:p-5 sm:pb-3">
           {/* Author & Proof info */}
@@ -78,7 +78,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
                 <TooltipContent side="top" className="max-w-xs">
                   <p className="font-semibold text-emerald-400">Zero-Knowledge Stealth</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Terverifikasi secara kriptografis on-chain tanpa menautkan ke wallet asal.
+                    Cryptographically verified on-chain without linking to source wallet.
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -111,7 +111,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
               <Link
                 href={`/rooms/${item.roomSlug}`}
                 className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary hover:bg-primary/20 transition-colors"
-                title={`Kamar #${item.roomSlug}`}
+                title={`Room #${item.roomSlug}`}
               >
                 #{item.roomSlug}
               </Link>
@@ -149,12 +149,12 @@ export function BoothCard({ item }: { item: FeedItem }) {
         {/* Actions & Reactions Footer */}
         <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 p-4 pt-3 sm:p-5 sm:pt-3">
           {/* Reactions */}
-          <div className="flex flex-wrap items-center gap-1.5" aria-label="Reaksi">
+          <div className="flex flex-wrap items-center gap-1.5" aria-label="Reactions">
             {Object.entries(item.reactions).map(([k, v]) => (
               <Link
                 key={k}
                 href={`/confessions/${item.publicId}`}
-                aria-label={`${v} reaksi ${k}`}
+                aria-label={`${v} reactions ${k}`}
                 className="group inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-border transition-all duration-150"
               >
                 <span
@@ -173,7 +173,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
             <Link
               href={`/confessions/${item.publicId}`}
               className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary transition-all duration-150"
-              aria-label={`${item.whisperCount} bisikan, buka detail`}
+              aria-label={`${item.whisperCount} whispers, open detail`}
             >
               <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="font-mono text-[11px] font-medium">{item.whisperCount}</span>
@@ -184,18 +184,18 @@ export function BoothCard({ item }: { item: FeedItem }) {
             <button
               type="button"
               onClick={handleCopyLink}
-              aria-label="Salin tautan confession ini"
+              aria-label="Copy confession link"
               className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:bg-muted/50 hover:text-foreground transition-all duration-150"
             >
               {copied ? (
                 <>
                   <Check className="h-3 w-3 text-emerald-400" aria-hidden="true" />
-                  <span className="text-[11px] font-medium text-emerald-400">Tersalin</span>
+                  <span className="text-[11px] font-medium text-emerald-400">Copied</span>
                 </>
               ) : (
                 <>
                   <Link2 className="h-3 w-3 opacity-70" aria-hidden="true" />
-                  <span className="text-[11px]">Salin</span>
+                  <span className="text-[11px]">Copy</span>
                 </>
               )}
             </button>
@@ -234,7 +234,7 @@ export function Empty({
 
 export function SkeletonList({ count = 3 }: { count?: number }) {
   return (
-    <div className="grid gap-4" aria-hidden="true" aria-label="Memuat daftar confession">
+    <div className="grid gap-4" aria-hidden="true" aria-label="Loading confessions">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}

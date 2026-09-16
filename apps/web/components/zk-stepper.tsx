@@ -26,26 +26,26 @@ interface StepItem {
 const STEPS: StepItem[] = [
   {
     id: 1,
-    label: 'Kunci Kriptografis',
-    description: 'Menurunkan identitas anonim deterministik via signature',
+    label: 'Cryptographic Key',
+    description: 'Derive deterministic anonymous identity via signature',
     icon: Lock,
   },
   {
     id: 2,
-    label: 'Pohon Merkle Anonim',
-    description: 'Sinkronisasi akar komitmen & verifikasi keanggotaan pool',
+    label: 'Anonymous Merkle Tree',
+    description: 'Synchronize root commitment & verify group membership',
     icon: Network,
   },
   {
     id: 3,
-    label: 'Komputasi ZK Proof',
-    description: 'Membangkitkan bukti sinyal & nullifier secara lokal di browser',
+    label: 'ZK Proof Computation',
+    description: 'Generate signal proof & nullifier locally in browser',
     icon: Cpu,
   },
   {
     id: 4,
-    label: 'Publikasi Unlinkable',
-    description: 'Menyiarkan confession tanpa token sesi maupun jejak wallet',
+    label: 'Unlinkable Publication',
+    description: 'Broadcast confession with zero session tokens or wallet traces',
     icon: Send,
   },
 ];
@@ -53,22 +53,30 @@ const STEPS: StepItem[] = [
 export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
   // Determine active step index (0-3) based on currentStatus text
   let activeIndex = 0;
+  const statusLower = currentStatus.toLowerCase();
   if (
-    currentStatus.includes('Merkle') ||
-    currentStatus.includes('Mendaftarkan') ||
-    currentStatus.includes('pool')
+    statusLower.includes('merkle') ||
+    statusLower.includes('mendaftarkan') ||
+    statusLower.includes('pool') ||
+    statusLower.includes('registering') ||
+    statusLower.includes('membership')
   ) {
     activeIndex = 1;
   } else if (
-    currentStatus.includes('Membangkitkan') ||
-    currentStatus.includes('Zero-Knowledge') ||
-    currentStatus.includes('Proof')
+    statusLower.includes('membangkitkan') ||
+    statusLower.includes('zero-knowledge') ||
+    statusLower.includes('proof') ||
+    statusLower.includes('generating') ||
+    statusLower.includes('witness')
   ) {
     activeIndex = 2;
   } else if (
-    currentStatus.includes('Menerbitkan') ||
-    currentStatus.includes('unlinkable') ||
-    currentStatus.includes('selesai')
+    statusLower.includes('menerbitkan') ||
+    statusLower.includes('unlinkable') ||
+    statusLower.includes('selesai') ||
+    statusLower.includes('publishing') ||
+    statusLower.includes('complete') ||
+    statusLower.includes('broadcasting')
   ) {
     activeIndex = 3;
   }
@@ -86,12 +94,12 @@ export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <DialogTitle className="text-lg font-bold text-foreground">
-              Komputasi ZK Stealth
+              ZK Stealth Computation
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Membangkitkan bukti kriptografi anonim di browser. Harap tunggu dan jangan tutup halaman
-            ini.
+            Generating anonymous cryptographic proof in browser. Please wait and do not close this
+            window.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,10 +159,10 @@ export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
                     </span>
                     {isCurrent ? (
                       <span className="font-mono text-[10px] text-emerald-400 animate-pulse">
-                        Memproses...
+                        Processing...
                       </span>
                     ) : isDone ? (
-                      <span className="font-mono text-[10px] text-emerald-500">Selesai</span>
+                      <span className="font-mono text-[10px] text-emerald-500">Complete</span>
                     ) : null}
                   </div>
                   <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
@@ -169,13 +177,14 @@ export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
         {/* Live terminal message box */}
         <div className="rounded-lg border border-emerald-900/40 bg-black/60 p-2.5 font-mono text-[11px] text-emerald-400/90 flex items-center gap-2">
           <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0 text-emerald-400" />
-          <span className="truncate">{currentStatus || 'Menyiapkan sirkuit bukti...'}</span>
+          <span className="truncate">{currentStatus || 'Preparing proof circuits...'}</span>
         </div>
 
         <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
           <span>
-            Sinyal dikirim tanpa otorisasi wallet. Identitas Anda tidak pernah bocor ke server.
+            Signals are dispatched without wallet authorizations. Your identity never touches the
+            server.
           </span>
         </p>
       </DialogContent>

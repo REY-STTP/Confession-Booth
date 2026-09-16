@@ -158,23 +158,23 @@ export function ComposerForm() {
     setError('');
     if (state !== 'booth' || !accessToken) {
       setStatus('error');
-      const msg = 'Masuk booth dulu (Enter the Booth) untuk publish.';
+      const msg = 'Enter the booth to publish.';
       setError(msg);
-      toast.error('Belum masuk booth', { description: msg });
+      toast.error('Not inside booth', { description: msg });
       return;
     }
     if (n < 1) {
-      setError('Tulis dulu pengakuanmu (min 1 karakter).');
+      setError('Please write your confession first (minimum 1 character).');
       setStatus('error');
       return;
     }
     if (n > 500) {
-      setError('Maksimal 500 karakter.');
+      setError('Maximum 500 characters.');
       setStatus('error');
       return;
     }
     if (markup) {
-      setError('HTML tidak diizinkan — tulis teks biasa.');
+      setError('HTML is not allowed — plaintext only.');
       setStatus('error');
       return;
     }
@@ -191,19 +191,19 @@ export function ComposerForm() {
       let res: Response;
 
       if (privacyMode === 'zk') {
-        setZkStep('Menghubungkan kunci identitas kriptografis…');
+        setZkStep('Connecting cryptographic identity key…');
         const sig = await getOrRequestSignature();
         const identity = await deriveAnonymousIdentityBrowser(sig);
 
-        setZkStep('Memeriksa status Merkle Tree pool anonim…');
+        setZkStep('Verifying anonymous Merkle Tree pool…');
         let rootRes = await fetch(`${API_URL}/api/zk/merkle-root`);
-        if (!rootRes.ok) throw new Error('Gagal menghubungi endpoint ZK Merkle root.');
+        if (!rootRes.ok) throw new Error('Failed to reach ZK Merkle root endpoint.');
         let rootData = await rootRes.json();
         let commitments: string[] = rootData.commitments ?? [];
 
         let leafIndex = commitments.indexOf(identity.commitment);
         if (leafIndex < 0) {
-          setZkStep('Mendaftarkan komitmen identitas ke Merkle tree…');
+          setZkStep('Registering identity commitment to Merkle tree…');
           const regRes = await fetch(`${API_URL}/api/zk/register-commitment`, {
             method: 'POST',
             headers: {
@@ -214,7 +214,7 @@ export function ComposerForm() {
           });
           if (!regRes.ok) {
             const b = await regRes.json().catch(() => ({}));
-            throw new Error(b?.error?.message ?? 'Gagal mendaftarkan komitmen identitas.');
+            throw new Error(b?.error?.message ?? 'Failed to register identity commitment.');
           }
           rootRes = await fetch(`${API_URL}/api/zk/merkle-root`);
           rootData = await rootRes.json();
@@ -222,7 +222,7 @@ export function ComposerForm() {
           leafIndex = commitments.indexOf(identity.commitment);
         }
 
-        setZkStep('Membangkitkan Zero-Knowledge Proof di browser…');
+        setZkStep('Generating Zero-Knowledge Proof in browser…');
         const merkleProof = await getMerkleProofBrowser(commitments, leafIndex);
         const contentHash = await canonicalHashBrowser(content);
         const epoch = getCurrentEpoch();
@@ -234,7 +234,7 @@ export function ComposerForm() {
           scope: 'confess',
         });
 
-        setZkStep('Menerbitkan secara unlinkable (tanpa token sesi)…');
+        setZkStep('Publishing unlinkable confession (zero session tokens)…');
         res = await fetch(`${API_URL}/api/confessions`, {
           method: 'POST',
           headers: {
@@ -251,47 +251,47 @@ export function ComposerForm() {
         });
       } else {
         res = await postConfession(idemKey);
-        // T1H-005: jawab tantangan PoW sekali lalu retry (tanpa provider eksternal).
+        // T1H-005: answer PoW challenge once and retry
         if (res.status === 429) {
           const b = await res.json().catch(() => ({}));
           const ch = b?.error?.challenge as { token?: string; difficulty?: number } | undefined;
           if (b?.error?.code === 'POW_REQUIRED' && ch?.token && typeof ch.difficulty === 'number') {
-            setError('Aktivitas tinggi — menyelesaikan proof-of-work…');
+            setError('High traffic — solving proof-of-work…');
             const salt = ch.token.split('.')[0];
             const nonceN = await solvePowBrowser(salt, ch.difficulty);
             if (nonceN === null) {
-              throw new Error('POW_FAILED — komputasi perangkat terlalu lambat, coba lagi.');
+              throw new Error('POW_FAILED — device computation timed out, please try again.');
             }
             res = await postConfession(idemKey, `${ch.token}:${nonceN}`);
           }
         }
       }
 
-      if (res.status === 401) throw new Error('Sesi kedaluwarsa, silakan masuk booth kembali.');
+      if (res.status === 401) throw new Error('Session expired, please enter the booth again.');
       if (res.status === 429) {
         const b = await res.json().catch(() => ({}));
         throw new Error(
           b?.error?.message ??
-            'Batas pengiriman tercapai untuk epoch saat ini. Silakan coba lagi nanti.',
+            'Submission limit reached for current epoch. Please try again later.',
         );
       }
       if (res.status === 409)
-        throw new Error('Pengakuan dengan isi yang sama sudah pernah diterbitkan.');
+        throw new Error('A confession with identical content has already been published.');
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        throw new Error(b?.error?.code ?? b?.error?.message ?? 'Gagal mempublikasikan pengakuan.');
+        throw new Error(b?.error?.code ?? b?.error?.message ?? 'Failed to publish confession.');
       }
 
       const body = await res.json();
       setPublicId(body.publicId ?? body.id ?? '');
       setPublishedProofType(body.proofType ?? (privacyMode === 'zk' ? 'ZK' : 'SESSION'));
       setStatus('visible');
-      toast.success('Pengakuan berhasil diterbitkan ke suaka!');
+      toast.success('Confession published to the sanctuary!');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Gagal terbit. Coba lagi.';
+      const msg = err instanceof Error ? err.message : 'Publish failed. Try again.';
       setError(msg);
       setStatus('error');
-      toast.error('Gagal menerbitkan', { description: msg });
+      toast.error('Failed to publish', { description: msg });
     }
   }
 
@@ -319,18 +319,18 @@ export function ComposerForm() {
 
           <div className="space-y-1">
             <h3 className="text-xl font-bold tracking-tight text-foreground">
-              Pengakuan Berhasil Diterbitkan
+              Confession Published Successfully
             </h3>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
               {publishedProofType === 'ZK' ? (
                 <>
-                  Pengakuanmu terlindungi oleh <strong>Zero-Knowledge Anonymous Stealth</strong>.
-                  Tidak ada alamat wallet atau data sesi yang tertaut di database maupun blockchain.
+                  Your confession is protected by <strong>Zero-Knowledge Anonymous Stealth</strong>.
+                  No wallet address or session data is linked in the database or blockchain.
                 </>
               ) : (
                 <>
-                  Pengakuanmu terbit secara <strong>Anonim</strong>. Identitas wallet Anda tidak
-                  pernah ditampilkan kepada publik.
+                  Your confession was published <strong>Anonymously</strong>. Your wallet identity
+                  is never shown to the public.
                 </>
               )}
             </p>
@@ -340,13 +340,13 @@ export function ComposerForm() {
             {publicId ? (
               <Link href={`/confessions/${encodeURIComponent(publicId)}`}>
                 <Button className="rounded-full gap-1.5 font-medium">
-                  <span>Lihat Pengakuan</span>
+                  <span>View Confession</span>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             ) : null}
             <Button variant="outline" onClick={handleReset} className="rounded-full">
-              Tulis Lagi
+              Write Another
             </Button>
           </div>
         </div>
@@ -365,8 +365,8 @@ export function ComposerForm() {
               What do you need to get off your chest?
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Tuliskan rahasia atau rasa yang terpendam. Suaka ini aman, tenang, dan tanpa
-              penghakiman.
+              Speak the secrets or feelings you carry. This sanctuary is safe, quiet, and without
+              judgment.
             </p>
           </div>
 
@@ -374,7 +374,7 @@ export function ComposerForm() {
           <div className="rounded-xl border border-border/70 bg-background/50 p-3 sm:p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Tingkat Kerahasiaan (Privacy Mode)
+                Privacy Mode
               </span>
               <Badge variant="outline" className="text-[10px] font-mono">
                 {privacyMode === 'zk' ? 'Max Stealth' : 'Standard'}
@@ -410,7 +410,7 @@ export function ComposerForm() {
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Cepat dan terotentikasi via sesi SIWE. Nama publik muncul sebagai Anonymous #NNNN.
+                  Fast and authenticated via SIWE session. Public name appears as Anonymous #NNNN.
                 </p>
               </button>
 
@@ -442,7 +442,7 @@ export function ComposerForm() {
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Kriptografis Zero-Knowledge. Unlinkable — tanpa jejak wallet di database maupun
+                  Zero-Knowledge cryptography. Unlinkable — zero wallet trace in database or
                   blockchain.
                 </p>
               </button>
@@ -452,9 +452,9 @@ export function ComposerForm() {
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/30 p-2.5 text-[11px] text-emerald-300 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5 text-emerald-400" />
                 <p className="leading-relaxed">
-                  <strong>Zero-Knowledge Stealth:</strong> Bukti keanggotaan digenerate di browser
-                  via Merkle Tree & Nullifier. Permintaan dikirim <em>tanpa token sesi</em> untuk
-                  privasi matematis mutlak.
+                  <strong>Zero-Knowledge Stealth:</strong> Membership proof is generated locally in
+                  your browser via Merkle Tree &amp; Nullifier. Request is sent{' '}
+                  <em>without session tokens</em> for absolute mathematical privacy.
                 </p>
               </div>
             ) : null}
@@ -463,7 +463,7 @@ export function ComposerForm() {
           {/* Emotion Category Pills */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
-              Pilih Nuansa Emosi
+              Choose Emotion Tag
             </label>
             <div className="flex flex-wrap gap-1.5" role="radiogroup">
               {EMOTION_CATEGORIES.map((c) => {
@@ -499,7 +499,7 @@ export function ComposerForm() {
                 htmlFor="room-select"
                 className="text-xs font-medium text-muted-foreground block"
               >
-                Kamar Komunitas (Opsional)
+                Community Room (Optional)
               </label>
               <select
                 id="room-select"
@@ -507,7 +507,7 @@ export function ComposerForm() {
                 onChange={(e) => setSelectedRoom(e.target.value)}
                 className="w-full rounded-xl border border-border/80 bg-background/80 px-3.5 py-2.5 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">Beranda Umum (Tanpa Kamar)</option>
+                <option value="">General Sanctuary (No Room)</option>
                 {rooms.map((r) => (
                   <option key={r.slug} value={r.slug}>
                     {r.name} (#{r.slug})
@@ -519,9 +519,9 @@ export function ComposerForm() {
             {/* Badges Selector */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground flex items-center justify-between">
-                <span>Lencana Reputasi (Opsional)</span>
+                <span>Reputation Badge (Optional)</span>
                 <span className="text-[11px] opacity-70">
-                  {badges.length > 0 ? `${badges.length} dimiliki` : 'Belum ada'}
+                  {badges.length > 0 ? `${badges.length} owned` : 'None'}
                 </span>
               </label>
 
@@ -537,7 +537,7 @@ export function ComposerForm() {
                         : 'border-border text-muted-foreground hover:border-border/80',
                     )}
                   >
-                    Polos
+                    None
                   </button>
                   {badges.map((b) => {
                     const meta = BADGE_META[b.type] ?? {
@@ -567,8 +567,8 @@ export function ComposerForm() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-border/60 bg-background/40 p-2.5 text-[11px] text-muted-foreground">
-                  Dapatkan lencana dengan aktif mendengarkan di jam malam atau menyambung rantai
-                  bisikan.
+                  Earn badges by actively listening during midnight hours or weaving whisper
+                  threads.
                 </div>
               )}
             </div>
@@ -580,7 +580,7 @@ export function ComposerForm() {
               htmlFor="confession-text"
               className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block"
             >
-              Isi Pengakuan
+              Confession Content
             </label>
             <div className="relative">
               <Textarea
@@ -615,7 +615,7 @@ export function ComposerForm() {
                 id="privacy-warn"
                 className="text-[11px] text-muted-foreground hidden xs:inline"
               >
-                Jangan tulis nama, alamat, atau info yang mengidentifikasimu.
+                Do not write names, addresses, or any info that identifies you.
               </span>
             </div>
           </div>
@@ -646,7 +646,7 @@ export function ComposerForm() {
             {status === 'pending' ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <span>{zkStep || 'Mempublikasikan...'}</span>
+                <span>{zkStep || 'Publishing...'}</span>
               </>
             ) : (
               <span>{privacyMode === 'zk' ? 'Confess (ZK Stealth)' : 'Confess'}</span>

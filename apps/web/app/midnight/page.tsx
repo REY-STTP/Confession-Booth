@@ -85,7 +85,7 @@ function MidnightInner() {
               aria-hidden="true"
             />
             <span className="font-medium">
-              {isLive ? 'Jam Malam Aktif Sekarang' : 'Arsip Jam Malam (00:00 – 04:00 WIB)'}
+              {isLive ? 'Midnight Hours Active Now' : 'Midnight Archive (00:00 – 04:00 WIB)'}
             </span>
           </div>
         </div>
@@ -98,7 +98,7 @@ function MidnightInner() {
           className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs sm:text-sm text-amber-200"
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
-          <p>API tidak terjangkau — menampilkan data cadangan lokal.</p>
+          <p>Sanctuary network unreachable — displaying cached local archive.</p>
         </div>
       ) : null}
 
@@ -107,13 +107,13 @@ function MidnightInner() {
         <SkeletonList count={4} />
       ) : items.length === 0 ? (
         <Empty
-          title="Malam ini sunyi."
-          sub="Belum ada pengakuan larut malam yang tertinggal di sini."
+          title="The night is silent."
+          sub="No late-night confessions have been left behind here yet."
           action={
             <Link href="/compose">
               <Button size="sm" className="rounded-full gap-1.5">
                 <PenLine className="h-3.5 w-3.5" />
-                <span>Tulis Pengakuan Malam</span>
+                <span>Write Midnight Confession</span>
               </Button>
             </Link>
           }

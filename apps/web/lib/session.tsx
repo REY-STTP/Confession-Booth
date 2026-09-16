@@ -76,24 +76,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           ethereum?: { request: (a: { method: string; params?: unknown }) => Promise<unknown> };
         }
       ).ethereum;
-      if (!eth) throw new Error('Wallet tidak ditemukan. Install MetaMask / wallet EVM dulu.');
+      if (!eth)
+        throw new Error('No Web3 wallet found. Please install MetaMask or an EVM wallet first.');
       setState('connecting');
       const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
       const address = accounts?.[0];
       if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address))
-        throw new Error('Alamat wallet invalid.');
+        throw new Error('Invalid wallet address.');
       // Chain check: harus sama dengan server.
       const chainHex = (await eth.request({ method: 'eth_chainId' })) as string;
       const walletChain = parseInt(chainHex, 16);
       const expected = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111);
       if (walletChain !== expected) {
-        throw new Error(`Chain salah (${walletChain}). Pindah ke chain ${expected} dulu.`);
+        throw new Error(`Incorrect network (${walletChain}). Please switch to chain ${expected}.`);
       }
       setState('signing');
       const nRes = await fetch(
         `${API_URL}/api/auth/nonce?address=${address}&chainId=${walletChain}`,
       );
-      if (nRes.status === 429) throw new Error('Terlalu sering. Tunggu sebentar (rate-limit).');
+      if (nRes.status === 429)
+        throw new Error('Too many requests. Please wait a moment (rate-limit).');
       if (!nRes.ok) {
         const b = await nRes.json().catch(() => ({}));
         throw new Error(b?.error?.code ?? `nonce failed: ${nRes.status}`);
@@ -106,7 +108,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           params: [message, address],
         })) as string;
       } catch {
-        throw new Error('Signature ditolak user.');
+        throw new Error('Signature request was rejected by user.');
       }
       const vRes = await fetch(`${API_URL}/api/auth/verify`, {
         method: 'POST',
@@ -116,7 +118,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
       if (vRes.status === 401) {
         const b = await vRes.json().catch(() => ({}));
-        throw new Error(b?.error?.code ?? 'Verifikasi gagal (expired/reuse/domain).');
+        throw new Error(b?.error?.code ?? 'Verification failed (expired/reuse/domain mismatch).');
       }
       if (!vRes.ok) throw new Error(`verify failed: ${vRes.status}`);
       const body = await vRes.json();
@@ -124,7 +126,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setSignature(sig);
       setState('booth');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Auth gagal.');
+      setError(e instanceof Error ? e.message : 'Authentication failed.');
       setState('visitor');
     }
   }, []);
@@ -136,10 +138,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ethereum?: { request: (a: { method: string; params?: unknown }) => Promise<unknown> };
       }
     ).ethereum;
-    if (!eth) throw new Error('Wallet tidak ditemukan.');
+    if (!eth) throw new Error('No Web3 wallet found.');
     const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
     const address = accounts?.[0];
-    if (!address) throw new Error('Alamat wallet tidak ditemukan.');
+    if (!address) throw new Error('No wallet address found.');
     const zkMsg = `Confession Booth Zero-Knowledge Stealth Key\n\nSign this message to derive your unlinkable anonymous identity. This costs no gas and is never broadcast.`;
     const sig = (await eth.request({
       method: 'personal_sign',

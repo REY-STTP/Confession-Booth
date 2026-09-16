@@ -46,7 +46,7 @@ function TrendingInner() {
             </h1>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Pengakuan yang paling banyak dirasakan dan direspon komunitas dalam 24 jam terakhir.
+            Confessions that resonated most with the sanctuary community over the past 24 hours.
           </p>
         </div>
       </div>
@@ -58,7 +58,7 @@ function TrendingInner() {
           className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs sm:text-sm text-amber-200"
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
-          <p>API tidak terjangkau — menampilkan data cadangan lokal.</p>
+          <p>Sanctuary network unreachable — displaying cached local archive.</p>
         </div>
       ) : null}
 
@@ -67,12 +67,12 @@ function TrendingInner() {
         <SkeletonList count={4} />
       ) : items.length === 0 ? (
         <Empty
-          title="Belum ada tren yang terbentuk."
-          sub="Beri reaksi pada pengakuan terbaru untuk membantu mengangkat suara yang bermakna."
+          title="No trending confessions yet."
+          sub="Empathize with recent confessions to surface meaningful voices."
           action={
             <Link href="/feed">
               <Button variant="outline" size="sm" className="rounded-full">
-                Jelajahi Pengakuan Terbaru
+                Explore Recent Confessions
               </Button>
             </Link>
           }

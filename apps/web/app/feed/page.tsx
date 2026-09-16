@@ -80,7 +80,7 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
           <Input
             name="q"
             defaultValue={q}
-            placeholder="Cari pengakuan atau kata kunci..."
+            placeholder="Search confessions or keywords..."
             className="pl-9 h-10 bg-card/60 border-border/80 text-sm focus-visible:ring-primary rounded-xl"
             maxLength={200}
           />
@@ -92,7 +92,7 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
           size="default"
           className="rounded-xl px-4 font-medium h-10"
         >
-          Cari
+          Search
         </Button>
       </form>
 
@@ -103,7 +103,7 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
       {hasFilter ? (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-3.5 py-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-2 flex-wrap">
-            <span>Filter aktif:</span>
+            <span>Active filters:</span>
             {category ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary font-medium">
                 #{category}
@@ -133,8 +133,8 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
         >
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
           <p>
-            API tidak terjangkau — menampilkan data cadangan lokal. Cek koneksi internet atau status
-            server.
+            API unreachable — displaying local fallback cache. Check your internet connection or
+            server status.
           </p>
         </div>
       ) : null}
@@ -144,24 +144,24 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
         <SkeletonList count={4} />
       ) : items.length === 0 ? (
         <Empty
-          title={hasFilter ? 'Tidak ada pengakuan yang cocok' : 'The booth is quiet.'}
+          title={hasFilter ? 'No matching confessions found' : 'The booth is quiet.'}
           sub={
             hasFilter
-              ? 'Coba ganti kata kunci pencarian atau hapus filter kategori.'
-              : 'Jadilah jiwa pertama yang meninggalkan jejak di ruang pengakuan ini.'
+              ? 'Try adjusting your search keywords or clearing category filters.'
+              : 'Be the first soul to leave an imprint in this sanctuary.'
           }
           action={
             hasFilter ? (
               <Link href="/feed">
                 <Button variant="outline" size="sm" className="rounded-full">
-                  Lihat Semua Pengakuan
+                  View All Confessions
                 </Button>
               </Link>
             ) : (
               <Link href="/compose">
                 <Button size="sm" className="rounded-full gap-1.5">
                   <PenLine className="h-3.5 w-3.5" />
-                  <span>Tulis Pengakuan</span>
+                  <span>Write a Confession</span>
                 </Button>
               </Link>
             )
@@ -186,10 +186,10 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
                 {loadingMore ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
-                    <span>Memuat confession...</span>
+                    <span>Loading confessions...</span>
                   </>
                 ) : (
-                  <span>Muat Lebih Banyak</span>
+                  <span>Load More</span>
                 )}
               </Button>
             </div>

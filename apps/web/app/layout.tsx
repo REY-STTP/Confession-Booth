@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     description:
       'Anonymous decentralized confession sanctuary. Express your deepest truths without social identity or algorithmic tracking.',
     type: 'website',
-    locale: 'id_ID',
+    locale: 'en_US',
     siteName: 'Confession Booth',
   },
   twitter: {
@@ -37,13 +37,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className="dark">
+    <html lang="en" className="dark">
       <body className="min-h-screen bg-background text-foreground antialiased flex flex-col justify-between selection:bg-primary/30 selection:text-foreground">
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:font-medium focus:shadow-lg"
         >
-          Lewati ke konten utama
+          Skip to main content
         </a>
 
         <SessionProvider>

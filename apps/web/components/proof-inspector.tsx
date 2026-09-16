@@ -58,7 +58,9 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
       })
       .catch((err) => {
         if (!cancelled) {
-          setError('Data bukti on-chain belum tersedia atau sedang dalam antrean indexing.');
+          setError(
+            'On-chain cryptographic proof data is not yet available or is queued in indexing.',
+          );
         }
       })
       .finally(() => {
@@ -74,10 +76,10 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
     try {
       await navigator.clipboard.writeText(val);
       setCopiedKey(key);
-      toast.success(`${label} berhasil disalin ke clipboard`);
+      toast.success(`${label} copied to clipboard`);
       setTimeout(() => setCopiedKey(null), 2000);
     } catch {
-      toast.error(`Gagal menyalin ${label}`);
+      toast.error(`Failed to copy ${label}`);
     }
   }
 
@@ -123,14 +125,14 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground hidden sm:block">
-              Verifikasi keaslian kriptografis dan pencatatan publikasi blockchain
+              Verify cryptographic authenticity and blockchain publication records
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="hidden xs:inline-block font-mono text-[11px]">
-            {isOpen ? 'Sembunyikan' : 'Periksa Bukti'}
+            {isOpen ? 'Hide' : 'Inspect Proof'}
           </span>
           {isOpen ? (
             <ChevronUp className="h-4 w-4 transition-transform" />
@@ -153,7 +155,7 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
             <div className="rounded-lg border border-border/70 bg-card/60 p-3.5 text-xs text-muted-foreground">
               <p>{error}</p>
               <p className="mt-1 text-[11px] opacity-70">
-                Pengakuan tetap aman dan tersimpan dalam suaka terdesentralisasi.
+                Confession remains safe and stored in the decentralized sanctuary.
               </p>
             </div>
           ) : proof ? (
@@ -198,7 +200,7 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}
-                    <span>{copiedKey === 'contentHash' ? 'Tersalin' : 'Salin'}</span>
+                    <span>{copiedKey === 'contentHash' ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
                 <div className="font-mono text-[11px] text-foreground/90 break-all select-all bg-background/60 p-2 rounded border border-border/40">
@@ -225,7 +227,7 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                         ) : (
                           <Copy className="h-3 w-3" />
                         )}
-                        <span>{copiedKey === 'txHash' ? 'Tersalin' : 'Salin'}</span>
+                        <span>{copiedKey === 'txHash' ? 'Copied' : 'Copy'}</span>
                       </button>
                       <a
                         href={`https://sepolia.etherscan.io/tx/${proof.txHash}`}
@@ -240,7 +242,7 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                   ) : null}
                 </div>
                 <div className="font-mono text-[11px] text-foreground/90 break-all select-all bg-background/60 p-2 rounded border border-border/40">
-                  {proof.txHash ?? 'Menunggu pencatatan batch di blockchain (mempool queue)...'}
+                  {proof.txHash ?? 'Awaiting on-chain batch anchor (mempool queue)...'}
                 </div>
               </div>
 

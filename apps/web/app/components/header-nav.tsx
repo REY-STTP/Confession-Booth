@@ -50,7 +50,7 @@ export function HeaderNav() {
     <header className="sticky top-0 z-40 w-full border-b border-border/80 bg-background/90 backdrop-blur-md transition-all">
       <nav
         className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6"
-        aria-label="Navigasi Utama"
+        aria-label="Main Navigation"
       >
         {/* Brand Mark & Title */}
         <Link
@@ -136,7 +136,7 @@ export function HeaderNav() {
                 variant="outline"
                 size="icon-sm"
                 className="rounded-lg"
-                aria-label="Buka menu navigasi"
+                aria-label="Open navigation menu"
               >
                 <Menu className="size-4" />
               </Button>
@@ -163,9 +163,9 @@ export function HeaderNav() {
                       <>
                         <ShieldCheck className="size-4 text-emerald-400" />
                         <div>
-                          <p className="font-medium text-foreground">Sesi Terverifikasi</p>
+                          <p className="font-medium text-foreground">Verified Session</p>
                           <p className="text-[11px] text-muted-foreground">
-                            Siap menulis & bereaksi
+                            Ready to write &amp; react
                           </p>
                         </div>
                       </>
@@ -173,9 +173,9 @@ export function HeaderNav() {
                       <>
                         <Shield className="size-4 text-muted-foreground" />
                         <div>
-                          <p className="font-medium text-foreground">Mode Pengunjung</p>
+                          <p className="font-medium text-foreground">Visitor Mode</p>
                           <p className="text-[11px] text-muted-foreground">
-                            Identitas anonim lokal
+                            Local anonymous identity
                           </p>
                         </div>
                       </>
@@ -185,7 +185,7 @@ export function HeaderNav() {
                     href="/settings"
                     className="text-xs font-medium text-primary hover:underline"
                   >
-                    Atur
+                    Manage
                   </Link>
                 </div>
 
@@ -260,7 +260,7 @@ export function HeaderNav() {
                 <Button asChild className="w-full rounded-xl">
                   <Link href="/compose">
                     <Plus className="size-4 mr-1.5" />
-                    <span>Tulis Pengakuan</span>
+                    <span>Write a Confession</span>
                   </Link>
                 </Button>
               </div>

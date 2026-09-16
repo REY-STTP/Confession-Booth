@@ -21,11 +21,11 @@ interface ReportDialogProps {
 }
 
 const REPORT_REASONS = [
-  { value: 'harassment', label: 'Pelecehan / Perundungan (Harassment)' },
-  { value: 'hate_speech', label: 'Ujaran Kebencian (Hate Speech)' },
-  { value: 'doxxing', label: 'Kebocoran Identitas Pribadi (Doxxing)' },
-  { value: 'spam', label: 'Spam / Iklan Terlarang' },
-  { value: 'other', label: 'Pelanggaran Panduan Komunitas Lainnya' },
+  { value: 'harassment', label: 'Harassment / Bullying' },
+  { value: 'hate_speech', label: 'Hate Speech' },
+  { value: 'doxxing', label: 'Personal Information Exposure (Doxxing)' },
+  { value: 'spam', label: 'Spam / Unauthorized Advertising' },
+  { value: 'other', label: 'Other Community Guidelines Violation' },
 ];
 
 export function ReportDialog({
@@ -53,17 +53,17 @@ export function ReportDialog({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error?.message ?? data?.error?.code ?? 'Gagal mengirim laporan');
+        throw new Error(data?.error?.message ?? data?.error?.code ?? 'Failed to submit report');
       }
 
-      toast.success('Laporan terkirim', {
-        description: 'Tim moderasi akan meninjau. Privasi Anda terjaga sepenuhnya.',
+      toast.success('Report submitted', {
+        description: 'The moderation team will review this. Your privacy is fully preserved.',
       });
       onOpenChange(false);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Gagal mengirim laporan.';
+      const msg = err instanceof Error ? err.message : 'Failed to submit report.';
       setError(msg);
-      toast.error('Gagal mengirim laporan', { description: msg });
+      toast.error('Failed to submit report', { description: msg });
     } finally {
       setIsSubmitting(false);
     }
@@ -75,11 +75,11 @@ export function ReportDialog({
         <DialogHeader>
           <div className="flex items-center gap-2 text-destructive mb-1">
             <AlertTriangle className="h-5 w-5" aria-hidden="true" />
-            <DialogTitle className="text-lg font-bold">Laporkan Pengakuan</DialogTitle>
+            <DialogTitle className="text-lg font-bold">Report Confession</DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Bantu menjaga kesakralan suaka pengakuan ini dengan melaporkan konten yang melanggar
-            panduan komunitas.
+            Help preserve the sanctity of this confession booth by reporting content that violates
+            community guidelines.
           </DialogDescription>
         </DialogHeader>
 
@@ -95,7 +95,7 @@ export function ReportDialog({
 
           <div className="space-y-1.5">
             <label htmlFor="report-reason" className="text-xs font-medium text-foreground">
-              Pilih Alasan Laporan
+              Choose Report Reason
             </label>
             <select
               id="report-reason"
@@ -119,7 +119,7 @@ export function ReportDialog({
               onClick={() => onOpenChange(false)}
               disabled={isSubmitting}
             >
-              Batal
+              Cancel
             </Button>
             <Button
               type="submit"
@@ -131,10 +131,10 @@ export function ReportDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                  <span>Mengirim...</span>
+                  <span>Sending...</span>
                 </>
               ) : (
-                <span>Kirim Laporan</span>
+                <span>Submit Report</span>
               )}
             </Button>
           </div>

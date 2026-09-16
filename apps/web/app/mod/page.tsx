@@ -46,14 +46,14 @@ function ModInner() {
         `/api/moderation/queue?status=${encodeURIComponent(status)}&limit=20`,
         accessToken,
       );
-      if (res.status === 401) throw new Error('Sesi kedaluwarsa — silakan masuk kembali.');
+      if (res.status === 401) throw new Error('Session expired — please enter the booth again.');
       if (res.status === 403)
-        throw new Error('Akses ditolak: Memerlukan wewenang MODERATOR atau ADMIN.');
-      if (!res.ok) throw new Error(`Gagal memuat antrean: status ${res.status}`);
+        throw new Error('Access denied: Requires MODERATOR or ADMIN privileges.');
+      if (!res.ok) throw new Error(`Failed to load queue: status ${res.status}`);
       const body = await res.json();
       setItems(body.items ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal memuat antrean moderasi.');
+      setError(e instanceof Error ? e.message : 'Failed to load moderation queue.');
       setItems([]);
     }
   }, [accessToken, state, status]);
@@ -78,10 +78,10 @@ function ModInner() {
           policy_version: 'v1.0',
         }),
       });
-      if (!res.ok) throw new Error(`Aksi gagal dijalankan (${res.status})`);
+      if (!res.ok) throw new Error(`Action execution failed (${res.status})`);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Aksi moderasi gagal.');
+      setError(e instanceof Error ? e.message : 'Moderation action failed.');
     } finally {
       setActing('');
     }
@@ -91,10 +91,10 @@ function ModInner() {
     return (
       <div className="rounded-2xl border border-border/80 bg-card/80 p-8 text-center space-y-3 max-w-lg mx-auto">
         <ShieldAlert className="mx-auto h-8 w-8 text-amber-400" />
-        <h2 className="text-lg font-semibold text-foreground">Antrean Moderasi</h2>
+        <h2 className="text-lg font-semibold text-foreground">Moderation Queue</h2>
         <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-          Silakan masuk ke dalam booth dengan dompet yang memiliki hak akses MODERATOR. Identitas
-          moderator tidak pernah diungkapkan kepada publik.
+          Please enter the booth with a wallet holding MODERATOR permissions. Moderator identities
+          are never disclosed to the public.
         </p>
       </div>
     );
@@ -107,12 +107,10 @@ function ModInner() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              Antrean Moderasi (Moderation Queue)
-            </h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Moderation Queue</h1>
           </div>
           <p className="text-xs text-muted-foreground">
-            Tinjau laporan konten dari komunitas. Tindakan yang Anda ambil tercatat dalam audit log.
+            Review community content reports. Actions taken are immutably logged in the audit trail.
           </p>
         </div>
 
@@ -125,7 +123,7 @@ function ModInner() {
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="rounded-xl border border-border/80 bg-background/80 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-            aria-label="Filter status antrean"
+            aria-label="Filter queue status"
           >
             {['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED'].map((s) => (
               <option key={s} value={s}>
@@ -152,8 +150,8 @@ function ModInner() {
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 bg-card/40 p-10 text-center text-xs sm:text-sm text-muted-foreground">
           <CheckCircle className="mx-auto h-8 w-8 text-emerald-400 mb-2 opacity-80" />
-          <p className="font-medium text-foreground">Antrean Bersih</p>
-          <p className="mt-1">Tidak ada laporan dengan status {status} saat ini.</p>
+          <p className="font-medium text-foreground">Queue Clean</p>
+          <p className="mt-1">No reports with status {status} at this time.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -171,7 +169,7 @@ function ModInner() {
                       {q.targetType}
                     </Badge>
                     <span className="font-mono text-xs font-semibold text-foreground">
-                      {q.targetPublicId ?? '(target dihapus)'}
+                      {q.targetPublicId ?? '(target deleted)'}
                     </span>
                     <Badge variant="destructive" className="text-[10px]">
                       {q.reason}
@@ -185,12 +183,12 @@ function ModInner() {
 
                 {/* Content Preview */}
                 <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs text-foreground/90 font-sans leading-relaxed break-words">
-                  {q.preview ? `"${q.preview}"` : '— (Pratinjau konten tidak tersedia)'}
+                  {q.preview ? `"${q.preview}"` : '— (Content preview unavailable)'}
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs flex-wrap gap-2">
                   <span className="text-[11px] text-muted-foreground">
-                    Status Target:{' '}
+                    Target Status:{' '}
                     <strong className="font-mono text-foreground">{q.targetStatus ?? '?'}</strong>
                   </span>
 
@@ -203,7 +201,7 @@ function ModInner() {
                       onClick={() => act(q.targetType, q.targetPublicId, 'DISMISS')}
                       className="rounded-full text-xs h-8 px-3"
                     >
-                      Abaikan (Dismiss)
+                      Dismiss
                     </Button>
 
                     <Button
@@ -214,7 +212,7 @@ function ModInner() {
                       className="rounded-full text-xs h-8 px-3 gap-1"
                     >
                       <EyeOff className="h-3 w-3" />
-                      <span>Sembunyikan</span>
+                      <span>Hide</span>
                     </Button>
 
                     <Button
@@ -225,7 +223,7 @@ function ModInner() {
                       className="rounded-full text-xs h-8 px-3 gap-1"
                     >
                       <Trash2 className="h-3 w-3" />
-                      <span>{isTargetActing ? 'Memproses...' : 'Hapus'}</span>
+                      <span>{isTargetActing ? 'Processing...' : 'Remove'}</span>
                     </Button>
                   </div>
                 </div>
@@ -239,8 +237,8 @@ function ModInner() {
       <div className="rounded-xl border border-border/60 bg-card/40 p-3.5 text-[11px] text-muted-foreground leading-relaxed flex items-start gap-2">
         <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
         <span>
-          Seluruh keputusan moderasi tercatat dalam audit log permanen (aktor, alasan, stempel
-          waktu, dan versi kebijakan v1.0). Identitas moderator tidak pernah dipublikasikan keluar.
+          All moderation decisions are recorded in permanent audit logs (actor, reason code,
+          timestamp, and policy version v1.0). Moderator identities are never revealed publicly.
         </span>
       </div>
     </div>

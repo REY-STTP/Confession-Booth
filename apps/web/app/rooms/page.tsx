@@ -37,15 +37,15 @@ export default function RoomsDirectoryPage() {
               </h1>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-              Ruang percakapan bertema terkurasi tanpa algoritma doxxing atau grafik follow. Temukan
-              ruang yang tepat untuk mengungkapkan rasa dengan privasi absolut.
+              Curated themed sanctuaries free from profiling algorithms and follower graphs. Find
+              the fitting sanctuary to express your truth with absolute privacy.
             </p>
           </div>
 
           <Link href="/compose" className="self-start sm:self-auto">
             <Button size="sm" className="rounded-full gap-1.5 font-medium shadow-xs">
               <PenLine className="h-3.5 w-3.5" />
-              <span>Tulis ke Room</span>
+              <span>Write to Room</span>
             </Button>
           </Link>
         </div>
@@ -55,9 +55,9 @@ export default function RoomsDirectoryPage() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base sm:text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
-            <span>Daftar Kamar Komunitas</span>
+            <span>Community Sanctuaries</span>
             <Badge variant="outline" className="text-xs font-mono">
-              {rooms.length} kamar aktif
+              {rooms.length} active rooms
             </Badge>
           </h2>
         </div>
@@ -106,7 +106,7 @@ export default function RoomsDirectoryPage() {
                     <div className="mt-3 rounded-lg border border-border/60 bg-background/50 p-2.5 text-xs text-muted-foreground flex items-start gap-1.5">
                       <BookOpen className="h-3.5 w-3.5 text-primary flex-shrink-0 mt-0.5" />
                       <p className="line-clamp-2">
-                        <strong className="text-foreground font-medium">Pedoman: </strong>
+                        <strong className="text-foreground font-medium">Guidelines: </strong>
                         {r.rules}
                       </p>
                     </div>
@@ -114,9 +114,9 @@ export default function RoomsDirectoryPage() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="font-mono">{r.confessionCount} pengakuan terbit</span>
+                  <span className="font-mono">{r.confessionCount} confessions published</span>
                   <span className="text-primary group-hover:translate-x-0.5 transition-transform inline-flex items-center gap-1 font-medium text-xs">
-                    <span>Masuk Kamar</span>
+                    <span>Enter Room</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </span>
                 </div>
@@ -131,12 +131,12 @@ export default function RoomsDirectoryPage() {
         <div>
           <h2 className="text-base sm:text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
             <Award className="h-5 w-5 text-amber-400" />
-            <span>Lencana Reputasi Anonim (Soulbound Badges)</span>
+            <span>Anonymous Reputation (Soulbound Badges)</span>
           </h2>
           <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-2xl">
-            Reputasi terbukti secara kriptografis tanpa mengekspos profil atau alamat wallet Anda.
-            Lencana diperoleh otomatis melalui kontribusi empati positif dan dapat dipasang secara
-            opsional pada pengakuan atau bisikan.
+            Cryptographically proven reputation without exposing your profile or wallet address.
+            Badges are earned through empathetic contributions and can be optionally attached to
+            confessions or whispers.
           </p>
         </div>
 

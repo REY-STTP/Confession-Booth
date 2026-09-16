@@ -42,10 +42,11 @@ export default function SettingsPage() {
       {/* Page Title */}
       <div className="space-y-1">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-          Sesi & Pengaturan Privasi
+          Session &amp; Privacy Settings
         </h1>
         <p className="text-xs sm:text-sm text-muted-foreground">
-          Kelola sesi wallet, verifikasi status anonim, dan pantau lencana reputasi komunitas Anda.
+          Manage your wallet session, verify anonymous status, and track your community reputation
+          badges.
         </p>
       </div>
 
@@ -65,16 +66,16 @@ export default function SettingsPage() {
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-semibold text-foreground">
-                Status Sesi Pengguna
+                User Session Status
               </h2>
               <p className="text-xs text-muted-foreground">
                 {state === 'booth'
-                  ? 'Di dalam booth — Sesi aktif terenkripsi'
+                  ? 'In the booth — Active encrypted session'
                   : state === 'connecting'
-                    ? 'Menghubungkan ke wallet...'
+                    ? 'Connecting to wallet...'
                     : state === 'signing'
-                      ? 'Menunggu verifikasi signature...'
-                      : 'Pengunjung Bebas (Visitor tanpa wallet)'}
+                      ? 'Awaiting signature verification...'
+                      : 'Visitor Mode (No wallet attached)'}
               </p>
             </div>
           </div>
@@ -83,7 +84,7 @@ export default function SettingsPage() {
             variant={state === 'booth' ? 'zk' : 'outline'}
             className="text-[10px] font-mono capitalize"
           >
-            {state === 'booth' ? '● Aktif' : '○ Visitor'}
+            {state === 'booth' ? '● Active' : '○ Visitor'}
           </Badge>
         </div>
 
@@ -99,11 +100,11 @@ export default function SettingsPage() {
 
         <div className="rounded-xl border border-border/60 bg-background/50 p-3.5 text-xs text-muted-foreground space-y-1.5">
           <div className="flex items-center justify-between">
-            <span>Model Penyimpanan Token:</span>
-            <span className="font-mono text-foreground">Memori Saja (Tanpa localStorage)</span>
+            <span>Token Storage Model:</span>
+            <span className="font-mono text-foreground">Memory Only (No localStorage)</span>
           </div>
           <div className="flex items-center justify-between">
-            <span>Jaringan Target:</span>
+            <span>Target Network:</span>
             <span className="font-mono text-foreground">Ethereum Sepolia (Chain #11155111)</span>
           </div>
         </div>
@@ -115,7 +116,7 @@ export default function SettingsPage() {
             className="w-full rounded-full border-border/80 hover:bg-destructive/10 hover:border-destructive/40 hover:text-destructive text-xs font-medium gap-2"
           >
             <LogOut className="h-4 w-4" />
-            <span>Keluar dari Booth (Revoke Sesi)</span>
+            <span>Exit Booth (Revoke Session)</span>
           </Button>
         ) : (
           <Button
@@ -126,12 +127,12 @@ export default function SettingsPage() {
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Memproses Hubungan Wallet...</span>
+                <span>Processing Wallet Connection...</span>
               </>
             ) : (
               <>
                 <Wallet className="h-4 w-4" />
-                <span>Enter the Booth (Masuk Sesi)</span>
+                <span>Enter the Booth</span>
               </>
             )}
           </Button>
@@ -144,17 +145,17 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2">
             <Award className="h-4 w-4 text-primary" />
             <h2 className="text-sm sm:text-base font-semibold text-foreground">
-              Galeri Lencana Reputasi
+              Reputation Badges Gallery
             </h2>
           </div>
           <Badge variant="outline" className="text-[10px] font-mono">
-            {userBadges.length} diraih
+            {userBadges.length} earned
           </Badge>
         </div>
 
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Lencana soulbound anonim menandai partisipasi bermakna Anda tanpa mengungkap alamat
-          wallet.
+          Anonymous soulbound badges reflect your meaningful contributions without disclosing your
+          wallet address.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -182,10 +183,10 @@ export default function SettingsPage() {
                     {isEarned ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400">
                         <CheckCircle2 className="h-3 w-3" />
-                        Terbuka
+                        Unlocked
                       </span>
                     ) : (
-                      <span className="text-[10px] text-muted-foreground font-mono">Terkunci</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">Locked</span>
                     )}
                   </div>
                   <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
@@ -213,12 +214,12 @@ export default function SettingsPage() {
       <div className="rounded-xl border border-border/60 bg-card/40 p-4 text-xs text-muted-foreground space-y-1.5 backdrop-blur-xs">
         <p className="font-semibold text-foreground flex items-center gap-1.5">
           <ShieldCheck className="h-4 w-4 text-primary" />
-          <span>Pemberitahuan Privasi & Keamanan</span>
+          <span>Privacy &amp; Security Notice</span>
         </p>
         <p className="leading-relaxed">
-          Pengakuan bersifat publik, profil tidak harus demikian. Blockchain dan metadata jaringan
-          dapat menimbulkan korelasi waktu. Jangan pernah menuliskan data pribadi yang mudah
-          diidentifikasi. Sesi Anda kedaluwarsa secara otomatis saat ditutup.
+          Your confession is public. Your profile doesn&rsquo;t have to be. Blockchain and network
+          metadata can create timing correlations. Never write personally identifiable information.
+          Your session expires automatically upon closing.
         </p>
       </div>
     </div>
