@@ -171,6 +171,7 @@ export async function verifyAndLogin(
           chainId: row.chainId,
           lastSeenAt: new Date(now),
           walletFirstTxAt: new Date(now),
+          status: 'ACTIVE',
         })
         .returning();
       u = ins[0];
@@ -181,6 +182,7 @@ export async function verifyAndLogin(
         .set({
           lastSeenAt: new Date(now),
           chainId: row.chainId,
+          status: 'ACTIVE',
           ...(u.walletFirstTxAt === null ? { walletFirstTxAt: new Date(now) } : {}),
         })
         .where(eq(schema.users.id, u.id))
