@@ -14,9 +14,21 @@ export function BoothCard({ item }: { item: FeedItem }) {
   return (
     <article className="booth-card p-5" aria-label={`Confession ${item.author.displayName}`}>
       <div className="flex items-center justify-between text-xs text-booth-dim">
-        <span className="font-medium text-booth-ink">{item.author.displayName}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-booth-ink">{item.author.displayName}</span>
+          {item.proofType === 'ZK' ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-700/60 bg-emerald-950/60 px-2 py-0.5 font-mono text-[10px] text-emerald-400"
+              title="Zero-Knowledge Anonymous Proof (Unlinkable)"
+            >
+              🛡️ ZK
+            </span>
+          ) : null}
+        </div>
         <span>
-          <span className="mr-2 rounded-full border border-booth-line px-2 py-0.5">{item.category}</span>
+          <span className="mr-2 rounded-full border border-booth-line px-2 py-0.5">
+            {item.category}
+          </span>
           {timeAgo(item.createdAt)}
         </span>
       </div>
@@ -24,7 +36,10 @@ export function BoothCard({ item }: { item: FeedItem }) {
       <p className="mt-3 whitespace-pre-wrap leading-relaxed">{item.content}</p>
       <div className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Reaksi">
         {Object.entries(item.reactions).map(([k, v]) => (
-          <span key={k} className="rounded-full border border-booth-line px-2.5 py-1 text-booth-dim">
+          <span
+            key={k}
+            className="rounded-full border border-booth-line px-2.5 py-1 text-booth-dim"
+          >
             {EMOJI[k] ?? '•'} {v}
           </span>
         ))}

@@ -16,17 +16,21 @@ type SessionState = 'visitor' | 'connecting' | 'signing' | 'booth';
 interface SessionCtx {
   state: SessionState;
   accessToken: string | null;
+  signature: string | null;
   error: string;
   enter: () => Promise<void>;
   logout: () => Promise<void>;
+  getOrRequestSignature: () => Promise<string>;
 }
 
 const Ctx = createContext<SessionCtx>({
   state: 'visitor',
   accessToken: null,
+  signature: null,
   error: '',
   enter: async () => {},
   logout: async () => {},
+  getOrRequestSignature: async () => '',
 });
 
 export function useSession(): SessionCtx {
@@ -39,6 +43,7 @@ export function useSession(): SessionCtx {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>('visitor');
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -94,9 +99,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         throw new Error(b?.error?.code ?? `nonce failed: ${nRes.status}`);
       }
       const { nonce, message } = await nRes.json();
-      let signature: string;
+      let sig: string;
       try {
-        signature = (await eth.request({
+        sig = (await eth.request({
           method: 'personal_sign',
           params: [message, address],
         })) as string;
@@ -107,7 +112,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ address, signature, nonce }),
+        body: JSON.stringify({ address, signature: sig, nonce }),
       });
       if (vRes.status === 401) {
         const b = await vRes.json().catch(() => ({}));
@@ -116,12 +121,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (!vRes.ok) throw new Error(`verify failed: ${vRes.status}`);
       const body = await vRes.json();
       setAccessToken(body.accessToken ?? null);
+      setSignature(sig);
       setState('booth');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Auth gagal.');
       setState('visitor');
     }
   }, []);
+
+  const getOrRequestSignature = useCallback(async (): Promise<string> => {
+    if (signature) return signature;
+    const eth = (
+      window as unknown as {
+        ethereum?: { request: (a: { method: string; params?: unknown }) => Promise<unknown> };
+      }
+    ).ethereum;
+    if (!eth) throw new Error('Wallet tidak ditemukan.');
+    const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
+    const address = accounts?.[0];
+    if (!address) throw new Error('Alamat wallet tidak ditemukan.');
+    const zkMsg = `Confession Booth Zero-Knowledge Stealth Key\n\nSign this message to derive your unlinkable anonymous identity. This costs no gas and is never broadcast.`;
+    const sig = (await eth.request({
+      method: 'personal_sign',
+      params: [zkMsg, address],
+    })) as string;
+    setSignature(sig);
+    return sig;
+  }, [signature]);
 
   const logout = useCallback(async () => {
     try {
@@ -134,12 +160,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // best-effort
     }
     setAccessToken(null);
+    setSignature(null);
     setState('visitor');
   }, [accessToken]);
 
   const value = useMemo(
-    () => ({ state, accessToken, error, enter, logout }),
-    [state, accessToken, error, enter, logout],
+    () => ({ state, accessToken, signature, error, enter, logout, getOrRequestSignature }),
+    [state, accessToken, signature, error, enter, logout, getOrRequestSignature],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

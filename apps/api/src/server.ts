@@ -454,6 +454,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const rows = rowsOf<ConfessionRow & { id: string }>(
       await db.execute(sql`
         SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category,
+               c.proof_type,
                ${ftsRank} AS rank
         FROM confessions c
         JOIN categories cat ON cat.id = c.category_id
@@ -482,7 +483,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   async function findConfession(db: Db, publicId: string) {
     const rows = rowsOf<ConfessionRow & { id: string }>(
       await db.execute(sql`
-        SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category
+        SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category, c.proof_type
         FROM confessions c JOIN categories cat ON cat.id = c.category_id
         WHERE c.public_id = ${publicId} LIMIT 1
       `),
@@ -553,11 +554,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) {
-      return reply
-        .code(400)
-        .send({
-          error: { code: 'INVALID_COMMITMENT', message: 'Invalid 32-byte hex commitment.' },
-        });
+      return reply.code(400).send({
+        error: { code: 'INVALID_COMMITMENT', message: 'Invalid 32-byte hex commitment.' },
+      });
     }
 
     const db = getDb();
@@ -657,14 +656,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (parsed.data.zkProof) {
       const zk = parsed.data.zkProof;
       if (zk.signal !== contentHash) {
-        return reply
-          .code(400)
-          .send({
-            error: {
-              code: 'SIGNAL_MISMATCH',
-              message: 'ZK proof signal does not match content hash.',
-            },
-          });
+        return reply.code(400).send({
+          error: {
+            code: 'SIGNAL_MISMATCH',
+            message: 'ZK proof signal does not match content hash.',
+          },
+        });
       }
 
       const all = rowsOf<{ commitment: string }>(
@@ -679,14 +676,12 @@ export async function buildApp(): Promise<FastifyInstance> {
         expectedSignal: contentHash,
       });
       if (!vProof.ok) {
-        return reply
-          .code(400)
-          .send({
-            error: {
-              code: vProof.reason ?? 'INVALID_PROOF',
-              message: 'Anonymous ZK proof invalid.',
-            },
-          });
+        return reply.code(400).send({
+          error: {
+            code: vProof.reason ?? 'INVALID_PROOF',
+            message: 'Anonymous ZK proof invalid.',
+          },
+        });
       }
 
       // T2-003: Anti-spam epoch nullifier
@@ -700,14 +695,12 @@ export async function buildApp(): Promise<FastifyInstance> {
         `),
       );
       if (existingNullifier.length > 0) {
-        return reply
-          .code(429)
-          .send({
-            error: {
-              code: 'RATE_LIMIT_EXCEEDED',
-              message: 'Anonymous rate limit reached for this epoch.',
-            },
-          });
+        return reply.code(429).send({
+          error: {
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: 'Anonymous rate limit reached for this epoch.',
+          },
+        });
       }
 
       nullifierHash = zk.nullifierHash;

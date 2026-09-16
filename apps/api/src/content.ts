@@ -40,6 +40,7 @@ export interface PublicConfession {
   reactions: Record<string, number>;
   whisperCount: number;
   status: string;
+  proofType?: string;
 }
 
 export interface ConfessionRow {
@@ -49,6 +50,7 @@ export interface ConfessionRow {
   status: string;
   created_at: Date;
   category: string;
+  proof_type?: string | null;
 }
 
 export function projectConfession(
@@ -71,6 +73,7 @@ export function projectConfession(
     },
     whisperCount,
     status: row.status.toLowerCase(),
+    proofType: row.proof_type ?? 'SESSION',
   };
 }
 

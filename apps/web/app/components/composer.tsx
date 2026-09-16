@@ -3,6 +3,13 @@
 import { useEffect, useState } from 'react';
 import { countChars, API_URL } from '@/lib/booth';
 import { useSession, apiFetch } from '@/lib/session';
+import {
+  deriveAnonymousIdentityBrowser,
+  getMerkleProofBrowser,
+  canonicalHashBrowser,
+  createAnonymousSignalProofBrowser,
+  getCurrentEpoch,
+} from '@/lib/zk';
 
 const CATS = [
   'love',
@@ -18,14 +25,17 @@ const CATS = [
   'midnight',
 ];
 
-/** Composer nyata T1-032 — auth wajib, idempotency UUID, render plaintext. */
+/** Composer nyata T1-032 / Fase 2 ZK Stealth — auth wajib, idempotency UUID, render plaintext. */
 export function ComposerForm() {
-  const { accessToken, state } = useSession();
+  const { accessToken, state, getOrRequestSignature } = useSession();
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('sad');
+  const [privacyMode, setPrivacyMode] = useState<'standard' | 'zk'>('standard');
+  const [zkStep, setZkStep] = useState('');
   const [status, setStatus] = useState<'idle' | 'pending' | 'visible' | 'error'>('idle');
   const [error, setError] = useState('');
   const [publicId, setPublicId] = useState('');
+  const [publishedProofType, setPublishedProofType] = useState('SESSION');
 
   const n = countChars(content);
   const markup = /<[a-zA-Z/!]/.test(content);
@@ -94,34 +104,101 @@ export function ComposerForm() {
     if (n > 500) return (setError('Maksimal 500 karakter.'), setStatus('error'));
     if (markup) return (setError('HTML tidak diizinkan — tulis teks biasa.'), setStatus('error'));
     setStatus('pending');
+    setZkStep('');
     try {
       const idemKey =
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      let res = await postConfession(idemKey);
-      // T1H-005: jawab tantangan PoW sekali lalu retry (tanpa provider eksternal).
-      if (res.status === 429) {
-        const b = await res.json().catch(() => ({}));
-        const ch = b?.error?.challenge as { token?: string; difficulty?: number } | undefined;
-        if (b?.error?.code === 'POW_REQUIRED' && ch?.token && typeof ch.difficulty === 'number') {
-          setError('Aktivitas tinggi — menyelesaikan proof-of-work…');
-          const salt = ch.token.split('.')[0];
-          const nonceN = await solvePowBrowser(salt, ch.difficulty);
-          if (nonceN === null) throw new Error('POW_FAILED — perangkat terlalu lambat, coba lagi.');
-          res = await postConfession(idemKey, `${ch.token}:${nonceN}`);
+
+      let res: Response;
+
+      if (privacyMode === 'zk') {
+        setZkStep('Menghubungkan kunci identitas kriptografis…');
+        const sig = await getOrRequestSignature();
+        const identity = await deriveAnonymousIdentityBrowser(sig);
+
+        setZkStep('Memeriksa status Merkle Tree pool anonim…');
+        let rootRes = await fetch(`${API_URL}/api/zk/merkle-root`);
+        if (!rootRes.ok) throw new Error('Gagal menghubungi endpoint ZK Merkle root.');
+        let rootData = await rootRes.json();
+        let commitments: string[] = rootData.commitments ?? [];
+
+        let leafIndex = commitments.indexOf(identity.commitment);
+        if (leafIndex < 0) {
+          setZkStep('Mendaftarkan komitmen identitas ke Merkle tree…');
+          const regRes = await fetch(`${API_URL}/api/zk/register-commitment`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ commitment: identity.commitment }),
+          });
+          if (!regRes.ok) {
+            const b = await regRes.json().catch(() => ({}));
+            throw new Error(b?.error?.message ?? 'Gagal mendaftarkan komitmen identitas.');
+          }
+          rootRes = await fetch(`${API_URL}/api/zk/merkle-root`);
+          rootData = await rootRes.json();
+          commitments = rootData.commitments ?? [];
+          leafIndex = commitments.indexOf(identity.commitment);
+        }
+
+        setZkStep('Membangkitkan Zero-Knowledge Proof di browser…');
+        const merkleProof = await getMerkleProofBrowser(commitments, leafIndex);
+        const contentHash = await canonicalHashBrowser(content);
+        const epoch = getCurrentEpoch();
+        const zkProof = await createAnonymousSignalProofBrowser({
+          identity,
+          merkleProof,
+          signal: contentHash,
+          epoch,
+          scope: 'confess',
+        });
+
+        setZkStep('Menerbitkan secara unlinkable (tanpa token sesi)…');
+        res = await fetch(`${API_URL}/api/confessions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idemKey,
+          },
+          body: JSON.stringify({ category, content, zkProof }),
+        });
+      } else {
+        res = await postConfession(idemKey);
+        // T1H-005: jawab tantangan PoW sekali lalu retry (tanpa provider eksternal).
+        if (res.status === 429) {
+          const b = await res.json().catch(() => ({}));
+          const ch = b?.error?.challenge as { token?: string; difficulty?: number } | undefined;
+          if (b?.error?.code === 'POW_REQUIRED' && ch?.token && typeof ch.difficulty === 'number') {
+            setError('Aktivitas tinggi — menyelesaikan proof-of-work…');
+            const salt = ch.token.split('.')[0];
+            const nonceN = await solvePowBrowser(salt, ch.difficulty);
+            if (nonceN === null)
+              throw new Error('POW_FAILED — perangkat terlalu lambat, coba lagi.');
+            res = await postConfession(idemKey, `${ch.token}:${nonceN}`);
+          }
         }
       }
+
       if (res.status === 401) throw new Error('UNAUTHORIZED — sesi habis, masuk lagi.');
-      if (res.status === 429)
-        throw new Error('RATE_LIMITED — kebanyakan publish, coba 1 jam lagi.');
+      if (res.status === 429) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(
+          b?.error?.message ??
+            'RATE_LIMITED — batas pengiriman tercapai untuk epoch ini (coba 1 jam lagi).',
+        );
+      }
       if (res.status === 409) throw new Error('CONTENT_DUPLICATE — sudah pernah publish ini.');
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        throw new Error(b?.error?.code ?? 'PUBLISH_FAILED');
+        throw new Error(b?.error?.code ?? b?.error?.message ?? 'PUBLISH_FAILED');
       }
       const body = await res.json();
       setPublicId(body.publicId ?? body.id ?? '');
+      setPublishedProofType(body.proofType ?? (privacyMode === 'zk' ? 'ZK' : 'SESSION'));
       setStatus('visible');
     } catch (err) {
       setError(
@@ -134,6 +211,51 @@ export function ComposerForm() {
   return (
     <form onSubmit={submit} className="booth-card space-y-4 p-5" aria-label="Composer">
       <h2 className="text-lg font-semibold">What do you need to get off your chest?</h2>
+
+      <div className="rounded-lg border border-booth-line bg-booth-bg/40 p-3.5">
+        <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-booth-dim">
+          Mode Privasi (Fase 2)
+        </span>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setPrivacyMode('standard')}
+            className={`rounded-lg border p-2.5 text-left text-xs transition ${
+              privacyMode === 'standard'
+                ? 'border-booth-accent bg-booth-accent/15 font-semibold text-booth-ink shadow-sm'
+                : 'border-booth-line text-booth-dim hover:text-booth-ink hover:bg-booth-bg'
+            }`}
+          >
+            <span className="block font-medium">🔘 Standard Anonymous</span>
+            <span className="mt-0.5 block text-[11px] opacity-80">
+              Sesi terautentikasi, nama Anonymous #NNNN
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPrivacyMode('zk')}
+            className={`rounded-lg border p-2.5 text-left text-xs transition ${
+              privacyMode === 'zk'
+                ? 'border-emerald-500 bg-emerald-950/50 font-semibold text-emerald-400 shadow-sm'
+                : 'border-booth-line text-booth-dim hover:text-booth-ink hover:bg-booth-bg'
+            }`}
+          >
+            <span className="block font-medium">🛡️ ZK Stealth Mode</span>
+            <span className="mt-0.5 block text-[11px] opacity-80">
+              Zero-knowledge proof, unlinkable
+            </span>
+          </button>
+        </div>
+        {privacyMode === 'zk' ? (
+          <p className="mt-2.5 rounded border border-emerald-800/40 bg-emerald-950/30 p-2 text-[11px] leading-relaxed text-emerald-300">
+            🛡️ <strong>Zero-Knowledge Stealth:</strong> Bukti keanggotaan digenerate langsung di
+            browser via Merkle Tree & Epoch Nullifier. Request dikirim <em>tanpa token sesi</em> —
+            identitas wallet Anda tidak pernah terhubung dengan pengakuan ini di database maupun
+            blockchain.
+          </p>
+        ) : null}
+      </div>
+
       <label className="block text-sm">
         <span className="mb-1 block text-booth-dim">Kategori (pilih satu)</span>
         <select
@@ -180,7 +302,7 @@ export function ComposerForm() {
       ) : null}
       {status === 'pending' ? (
         <p role="status" className="text-sm text-booth-dim">
-          Mempublikasikan… (menunggu konfirmasi)
+          {zkStep ? `⏳ ${zkStep}` : 'Mempublikasikan… (menunggu konfirmasi)'}
         </p>
       ) : null}
       {status === 'visible' ? (
@@ -189,8 +311,17 @@ export function ComposerForm() {
           className="rounded-lg border border-green-800 bg-green-950 p-3 text-sm text-green-200"
         >
           <p>
-            Pengakuanmu terbit sebagai <strong>Anonymous</strong>. Tidak ada profil/wallet yang
-            ditampilkan.
+            {publishedProofType === 'ZK' ? (
+              <>
+                🛡️ Pengakuanmu terbit secara <strong>Zero-Knowledge Anonymous (Unlinkable)</strong>.
+                Tidak ada alamat wallet atau data sesi yang tercatat!
+              </>
+            ) : (
+              <>
+                Pengakuanmu terbit sebagai <strong>Anonymous</strong>. Tidak ada profil/wallet yang
+                ditampilkan.
+              </>
+            )}
           </p>
           {publicId ? (
             <p className="mt-1">
@@ -204,9 +335,15 @@ export function ComposerForm() {
       <button
         type="submit"
         disabled={status === 'pending'}
-        className="w-full rounded-xl bg-booth-accent px-4 py-3 font-semibold text-black disabled:opacity-50"
+        className={`w-full rounded-xl px-4 py-3 font-semibold text-black transition disabled:opacity-50 ${
+          privacyMode === 'zk' ? 'bg-emerald-400 hover:bg-emerald-300' : 'bg-booth-accent'
+        }`}
       >
-        {status === 'pending' ? 'Mempublikasikan…' : 'Confess'}
+        {status === 'pending'
+          ? 'Mempublikasikan…'
+          : privacyMode === 'zk'
+            ? 'Confess (ZK Stealth)'
+            : 'Confess'}
       </button>
     </form>
   );
