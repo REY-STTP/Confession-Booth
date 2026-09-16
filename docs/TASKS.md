@@ -248,7 +248,7 @@ Tujuan: PRD §20 acceptance criteria + FR-001..010 (P0). FR-011..014 (P1) minima
 #### T1-025 — P0 Tooling + env + Docker + Vercel-ready
 
 - [x] `eslint.config.mjs`: aktifkan `js.configs.recommended + tseslint + next` (ganti stub ignores-only); `npm run lint` hijau tanpa `--max-warnings 0` bypass.
-- [x] Perbaiki `apps/api package.json dev` (`node --watch ./src/index.js` rusak → `tsx`/`ts-node` atau `node --watch dist`), tambah `apps/api/.env.example` (port 5433 vs 5432 disamakan), hapus `dist/mock.*` orphan + `dist/` dari repo, tambah `.dockerignore`.
+- [x] Perbaiki `apps/api package.json dev` (`node --watch ./src/index.js` rusak → `tsx`/`ts-node` atau `node --watch dist`), sentralisasi konfigurasi di root `.env.example` (apps/api otomatis fallback ke root `.env`), hapus `dist/mock.*` orphan + `dist/` dari repo, tambah `.dockerignore`.
 - [x] `Dockerfile api/web`: `USER node`, `HEALTHCHECK`, `COPY package-lock`, install prod-only, api sertakan `scripts/db/*` + `@booth/shared` workspace agar bisa migrate di prod.
 - [x] Web Vercel-split: hapus hardcode `http://localhost:4000` (pakai `NEXT_PUBLIC_API_URL`), CSP `connect-src` ikut env prod, `CORS_ORIGIN` = domain Vercel; putuskan: **web→Vercel, api→Railway/Render/Fly + Neon/Supabase PG**.
 - **AC:** `lint/typecheck/test/build` hijau fresh clone; image non-root + healthcheck; web prod build tanpa `localhost`.

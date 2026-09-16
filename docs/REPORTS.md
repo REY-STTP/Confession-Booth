@@ -141,7 +141,7 @@ const receipt = await pub.waitForTransactionReceipt({
 });
 ```
 
-**Fix:** Require `confirmations: 3` minimum. Add reorg detection in indexer: if event disappears, mark publication `FAILED` and re-queue.
+**Fix:** Require `confirmations: 3` minimum. Add reorg detection in indexer: if event disappears, mark publication `FAILED` and re-queue. _(Implementasi: `confirmations` default 3 pada testnet/mainnet, otomatis 1 pada local chain `31337` agar automine test tidak timeout)._
 
 ---
 
@@ -170,7 +170,7 @@ const origin = req.headers.origin as string | undefined;
 if (!origin) return true; // Allows null origin
 ```
 
-**Fix:** Reject requests with missing or `null` origin for cookie endpoints. Use `SameSite=Strict` for refresh cookie (currently `Lax`).
+**Fix:** Reject requests with missing or `null` origin for cookie endpoints. Use `SameSite=Strict` for refresh cookie (currently `Lax`). _(Implementasi: `checkCsrf` menolak missing/null origin; test unit `app.inject` di `auth.test.ts` menyertakan `Origin: http://localhost:3000`)._
 
 ---
 

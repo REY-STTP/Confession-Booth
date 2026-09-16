@@ -27,6 +27,8 @@
 
 ## Environment Variables
 
+All environment variables are centralized in the monorepo root `.env` (copied from `.env.example`). `apps/api` runtime and maintenance scripts automatically resolve variables from the root workspace (`.env`) when running directly, via npm workspaces, or in Docker.
+
 Example:
 
 ```env

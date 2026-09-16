@@ -12,6 +12,7 @@
 
 - Primer + cadangan di secret manager; rotasi tanpa deploy ulang bila via env restart.
 - Publisher backoff otomatis: `FAILED` dicoba ulang tiap 5 mnt (`attempts` tercatat).
+- Publisher konfirmasi: default 3 konfirmasi (reorg safety) pada testnet/mainnet; 1 konfirmasi pada local hardhat node (`chainId: 31337`) agar tidak timeout pada automine.
 - Tanpa `RPC_URL/PUBLISHER_KEY` worker skip aman (tetap `PENDING_CHAIN`, tidak crash).
 - Ganti `PUBLISHER_KEY`: pastikan saldo gas + update secret + restart worker.
 
@@ -30,9 +31,10 @@
 - Restore drill: `npm run db:restore --workspace @booth/api -- backups/<file>.dump` ke DB staging KOSONG (JANGAN prod).
 - Bukti lokal 2026-09-15: `size=86592B tables=16` OK.
 
-## 5. Rollback
+## 5. Rollback & Migrasi
 
-- Migrasi: `npm run db:rollback` (SATU migrasi terakhir; dev/staging saja; prod → forward-fix).
+- Migrasi: `npm run db:migrate --workspace @booth/api` (menerapkan urutan `0001_init` s/d `0005_indexer_mismatches`; script otomatis membaca `.env` di root).
+- Rollback: `npm run db:rollback --workspace @booth/api` (SATU migrasi terakhir; dev/staging saja; prod → forward-fix).
 - App: redeploy image/commit sebelumnya (kontrak immutable — histori on-chain tidak bisa di-rollback).
 - Checklist pasca-rollback: `/api/health`, `/api/metrics` alert clear, smoke feed+publish.
 
