@@ -65,14 +65,13 @@ export default function PrivacyPage() {
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Kami <strong>tidak pernah menjanjikan anonimitas sempurna</strong> jika pengguna
-            bersikap ceroboh. Riwayat transaksi blockchain, metadata penyedia RPC internet, korelasi
-            waktu, atau isi teks pengakuan itu sendiri dapat menjadi sumber de-anonimisasi.
+            Kami <strong>tidak pernah menjanjikan anonimitas sempurna</strong>. Riwayat transaksi
+            blockchain, metadata RPC/jaringan, dan perilakumu sendiri masih bisa menjadi sumber
+            korelasi.
           </p>
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            <strong>Peringatan Penting:</strong> Jangan pernah mencantumkan nama lengkap, alamat
-            fisik, nomor telepon, nomor rekening, atau detail khas yang dapat dengan mudah dikenali
-            oleh orang terdekat Anda.
+            <strong>Peringatan Penting:</strong> Jangan tulis nama, alamat, nomor telepon, atau
+            detail unik yang mudah mengidentifikasimu.
           </div>
         </section>
 

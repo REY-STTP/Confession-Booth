@@ -1,14 +1,5 @@
 import Link from 'next/link';
-import {
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Lock,
-  EyeOff,
-  PenLine,
-  Heart,
-  Moon,
-} from 'lucide-react';
+import { ArrowRight, ShieldCheck, Lock, EyeOff, PenLine, Moon } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { Button } from '@/components/ui/button';
 
@@ -48,7 +39,7 @@ export default function Landing() {
                 size="lg"
                 className="w-full sm:w-auto rounded-full px-8 py-6 text-sm sm:text-base font-semibold shadow-md gap-2"
               >
-                <span>Masuk ke Booth</span>
+                <span>Enter the Booth</span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -66,8 +57,9 @@ export default function Landing() {
           </div>
 
           <p className="mx-auto mt-8 max-w-md text-xs leading-relaxed text-muted-foreground">
-            Pengakuan Anda bersifat publik, tetapi profil Anda tidak harus demikian. Kami tidak
-            mengumpulkan profil atau melacak identitas Anda.{' '}
+            Your confession is public. Your profile doesn&rsquo;t have to be. Blockchain and network
+            metadata can still create privacy risks — don&rsquo;t include information that could
+            identify you.{' '}
             <Link href="/privacy" className="text-primary hover:underline font-medium">
               Pelajari batas privasi →
             </Link>

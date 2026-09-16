@@ -147,13 +147,13 @@ export function ComposerForm() {
     setError('');
     if (state !== 'booth' || !accessToken) {
       setStatus('error');
-      const msg = 'Masuk booth dulu (Enter the Booth) untuk menerbitkan pengakuan.';
+      const msg = 'Masuk booth dulu (Enter the Booth) untuk publish.';
       setError(msg);
       toast.error('Belum masuk booth', { description: msg });
       return;
     }
     if (n < 1) {
-      setError('Tulis dulu pengakuanmu (minimal 1 karakter).');
+      setError('Tulis dulu pengakuanmu (min 1 karakter).');
       setStatus('error');
       return;
     }
@@ -163,7 +163,7 @@ export function ComposerForm() {
       return;
     }
     if (markup) {
-      setError('HTML tidak diizinkan — harap tulis dalam teks biasa.');
+      setError('HTML tidak diizinkan — tulis teks biasa.');
       setStatus('error');
       return;
     }
@@ -277,7 +277,7 @@ export function ComposerForm() {
       setStatus('visible');
       toast.success('Pengakuan berhasil diterbitkan ke suaka!');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Gagal menerbitkan pengakuan.';
+      const msg = err instanceof Error ? err.message : 'Gagal terbit. Coba lagi.';
       setError(msg);
       setStatus('error');
       toast.error('Gagal menerbitkan', { description: msg });
@@ -346,7 +346,7 @@ export function ComposerForm() {
         <form
           onSubmit={submit}
           className="rounded-2xl border border-border/80 bg-card/85 p-5 sm:p-7 space-y-6 shadow-sm backdrop-blur-sm"
-          aria-label="Formulir pengakuan"
+          aria-label="Composer"
         >
           {/* Header */}
           <div className="space-y-1">
@@ -576,7 +576,7 @@ export function ComposerForm() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onPaste={onPaste}
-                placeholder="Tuliskan isi hatimu di sini tanpa rasa takut..."
+                placeholder="Write your confession..."
                 rows={6}
                 maxLength={500}
                 className="w-full resize-y rounded-xl border-border/80 bg-background/80 p-4 text-sm sm:text-base leading-relaxed placeholder:text-muted-foreground focus-visible:ring-primary font-sans"
@@ -597,26 +597,26 @@ export function ComposerForm() {
                 )}
                 aria-live="polite"
               >
-                {n}/500 karakter
+                {n}/500
               </span>
               <span
                 id="privacy-warn"
                 className="text-[11px] text-muted-foreground hidden xs:inline"
               >
-                Privasi: hindari menyebut nama, nomor telepon, atau data pribadi.
+                Jangan tulis nama, alamat, atau info yang mengidentifikasimu.
               </span>
             </div>
           </div>
 
           {/* Error message */}
           {error ? (
-            <div
+            <p
               role="alert"
               className="rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs sm:text-sm text-destructive flex items-center gap-2"
             >
               <AlertTriangle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
-            </div>
+            </p>
           ) : null}
 
           {/* Submit Button */}
@@ -634,10 +634,10 @@ export function ComposerForm() {
             {status === 'pending' ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <span>{zkStep || 'Mempublikasikan ke blockchain...'}</span>
+                <span>{zkStep || 'Mempublikasikan...'}</span>
               </>
             ) : (
-              <span>{privacyMode === 'zk' ? 'Confess dengan ZK Stealth' : 'Confess Sekarang'}</span>
+              <span>{privacyMode === 'zk' ? 'Confess (ZK Stealth)' : 'Confess'}</span>
             )}
           </Button>
         </form>
