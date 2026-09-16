@@ -247,13 +247,13 @@ export function HeaderNav() {
                     <span>Settings</span>
                   </Link>
                   <a
-                    href="https://sepolia.etherscan.io"
+                    href="https://sepolia.etherscan.io/address/0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 p-2 rounded-lg hover:bg-secondary/60 hover:text-foreground transition-colors"
                   >
                     <span className="size-1.5 rounded-full bg-emerald-400 inline-block" />
-                    <span>Sepolia</span>
+                    <span>Sepolia Contract</span>
                   </a>
                 </div>
 

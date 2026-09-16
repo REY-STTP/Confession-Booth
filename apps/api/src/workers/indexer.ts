@@ -30,8 +30,11 @@ const MISMATCH_ALERT_THRESHOLD = 5; // alert jika mismatch > 5 per tick
 export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<IndexerReport> {
   const E: ChainEnv = env ?? {
     rpcUrl: process.env.RPC_URL ?? '',
-    contractAddress: (config.contractAddress ||
-      '0x0000000000000000000000000000000000000000') as never,
+    contractAddress: (config.contractAddress && !config.contractAddress.startsWith('0x0000')
+      ? config.contractAddress
+      : process.env.CONTRACT_ADDRESS && !process.env.CONTRACT_ADDRESS.startsWith('0x0000')
+        ? process.env.CONTRACT_ADDRESS
+        : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0') as never,
     chainId: config.chainId,
   };
   if (!E.rpcUrl) {

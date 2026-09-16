@@ -83,10 +83,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 Session & Badges
               </Link>
               <span className="text-border">•</span>
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <a
+                href="https://sepolia.etherscan.io/address/0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <span className="size-1.5 rounded-full bg-emerald-400" />
                 Sepolia
-              </span>
+              </a>
             </div>
           </div>
         </footer>

@@ -193,7 +193,12 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
       txHash: row.transaction_hash,
       blockNumber: row.block_number,
       status: row.status ?? 'PENDING_CHAIN',
-      contractAddress: row.contract_address ?? (config.contractAddress || null),
+      contractAddress:
+        row.contract_address && !row.contract_address.startsWith('0x0000')
+          ? row.contract_address
+          : config.contractAddress && !config.contractAddress.startsWith('0x0000')
+            ? config.contractAddress
+            : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0',
       chainId: String(row.chain_id ?? config.chainId),
     };
   });
@@ -412,7 +417,10 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
         await tx.insert(schema.publications).values({
           confessionId: conf[0].id,
           chainId: config.chainId,
-          contractAddress: config.contractAddress || '0x0000000000000000000000000000000000000000',
+          contractAddress:
+            config.contractAddress && !config.contractAddress.startsWith('0x0000')
+              ? config.contractAddress
+              : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0',
           onchainConfessionId: onchainId(publicId),
           contentHash,
           status: 'PENDING_CHAIN',

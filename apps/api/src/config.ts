@@ -37,7 +37,10 @@ export const config = {
   appDomain: process.env.APP_DOMAIN ?? 'booth.local',
   appName: 'Confession Booth',
   chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111),
-  contractAddress: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? '',
+  contractAddress: (() => {
+    const raw = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || process.env.CONTRACT_ADDRESS;
+    return raw && !raw.startsWith('0x0000') ? raw : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0';
+  })(),
   corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000').split(','),
   accessTtlMs: 60 * 60 * 1000, // 1 jam
   refreshTtlMs: 30 * 24 * 3600 * 1000, // 30 hari

@@ -255,12 +255,47 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                   </p>
                 </div>
 
-                <div className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3">
-                  <span className="text-muted-foreground font-medium block">Contract Address</span>
-                  <p className="font-mono text-[11px] text-foreground break-all select-all">
-                    {proof.contractAddress ?? '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0'}
-                  </p>
-                </div>
+                {(() => {
+                  const contractAddr =
+                    proof.contractAddress && !proof.contractAddress.startsWith('0x0000')
+                      ? proof.contractAddress
+                      : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0';
+                  return (
+                    <div className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground font-medium block">
+                          Contract Address
+                        </span>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => copyValue('contract', contractAddr, 'Contract Address')}
+                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {copiedKey === 'contract' ? (
+                              <Check className="h-3 w-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                            <span>{copiedKey === 'contract' ? 'Copied' : 'Copy'}</span>
+                          </button>
+                          <a
+                            href={`https://sepolia.etherscan.io/address/${contractAddr}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
+                          >
+                            <span>Etherscan</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      </div>
+                      <p className="font-mono text-[11px] text-foreground break-all select-all">
+                        {contractAddr}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ) : null}

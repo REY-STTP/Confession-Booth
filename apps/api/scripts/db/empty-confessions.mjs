@@ -1,4 +1,14 @@
 import pg from 'pg';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+
+dotenv.config();
+const rootEnv = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '.env');
+if (existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -20,10 +30,14 @@ async function emptyConfessions() {
     const w = await client.query('DELETE FROM whispers');
     console.log(`Deleted ${w.rowCount} whispers.`);
 
-    const rep = await client.query("DELETE FROM reports WHERE target_type IN ('CONFESSION', 'WHISPER')");
+    const rep = await client.query(
+      "DELETE FROM reports WHERE target_type IN ('CONFESSION', 'WHISPER')",
+    );
     console.log(`Deleted ${rep.rowCount} reports.`);
 
-    const mod = await client.query("DELETE FROM moderation_actions WHERE target_type IN ('CONFESSION', 'WHISPER')");
+    const mod = await client.query(
+      "DELETE FROM moderation_actions WHERE target_type IN ('CONFESSION', 'WHISPER')",
+    );
     console.log(`Deleted ${mod.rowCount} moderation actions.`);
 
     const pub = await client.query('DELETE FROM publications');
