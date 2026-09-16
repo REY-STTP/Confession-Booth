@@ -22,8 +22,11 @@ const B = privateKeyToAccount(generatePrivateKey());
 
 before(async () => {
   await app.ready();
+  // Bersihkan buckets rate limit agar test isolasi IP lolos
+  await db.execute(sql`TRUNCATE rate_limit_buckets`);
+  // Hapus hanya akun test A & B jika pernah tersimpan, JANGAN sentuh user lain
   await db.execute(
-    sql`TRUNCATE sessions, auth_nonces, users, rate_limit_buckets RESTART IDENTITY CASCADE`,
+    sql`DELETE FROM users WHERE wallet_address IN (${A.address.toLowerCase()}, ${B.address.toLowerCase()})`,
   );
 });
 

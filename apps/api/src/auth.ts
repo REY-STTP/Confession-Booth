@@ -162,6 +162,25 @@ export async function verifyAndLogin(
       .where(eq(schema.users.walletAddress, address))
       .limit(1);
     let u = found[0];
+
+    // Bootstrap/persistent roles via environment variables (ADMIN_WALLETS, MODERATOR_WALLETS)
+    const adminWallets = (process.env.ADMIN_WALLETS ?? '')
+      .toLowerCase()
+      .split(',')
+      .map((w) => w.trim())
+      .filter(Boolean);
+    const modWallets = (process.env.MODERATOR_WALLETS ?? '')
+      .toLowerCase()
+      .split(',')
+      .map((w) => w.trim())
+      .filter(Boolean);
+
+    const envRole: 'ADMIN' | 'MODERATOR' | null = adminWallets.includes(address)
+      ? 'ADMIN'
+      : modWallets.includes(address)
+        ? 'MODERATOR'
+        : null;
+
     if (!u) {
       // First login: set wallet_first_tx_at to now (wallet age = first on-chain interaction)
       const ins = await tx
@@ -172,6 +191,7 @@ export async function verifyAndLogin(
           lastSeenAt: new Date(now),
           walletFirstTxAt: new Date(now),
           status: 'ACTIVE',
+          ...(envRole ? { role: envRole } : {}),
         })
         .returning();
       u = ins[0];
@@ -183,6 +203,7 @@ export async function verifyAndLogin(
           lastSeenAt: new Date(now),
           chainId: row.chainId,
           status: 'ACTIVE',
+          ...(envRole ? { role: envRole } : {}),
           ...(u.walletFirstTxAt === null ? { walletFirstTxAt: new Date(now) } : {}),
         })
         .where(eq(schema.users.id, u.id))

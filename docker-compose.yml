@@ -50,6 +50,8 @@ services:
       CAPTCHA_SECRET: ${CAPTCHA_SECRET:-}
       # Admin bootstrap (server-only, JANGAN NEXT_PUBLIC_*):
       ADMIN_SECRET: ${ADMIN_SECRET:-}
+      ADMIN_WALLETS: ${ADMIN_WALLETS:-}
+      MODERATOR_WALLETS: ${MODERATOR_WALLETS:-}
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - '4000:4000'
