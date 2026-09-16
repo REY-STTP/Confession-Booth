@@ -121,6 +121,7 @@ Validation:
 - no executable markup;
 - rate limit;
 - abuse checks.
+- body limit: `BODY_LIMIT` env var (default 102400 bytes).
 
 Response:
 
@@ -137,7 +138,7 @@ Catatan T1-028: `publicId` = ID opaque `c_...`/`w_...`, BUKAN display name.
 `author.displayName` = `Anonymous #NNNN` dari `displaySeed` acak per-confession.
 Feed langsung `VISIBLE`; publikasi chain async `publications.status=PENDING_CHAIN` (bukan gate tampil).
 
-Dedup: `409 CONTENT_DUPLICATE` bila `sha256(normalizeForDedup)` sama per-user 10 mnt.
+Dedup: `409 CONTENT_DUPLICATE` bila `sha256(normalizeForDedup)` sama per-user 24 jam.
 
 Anti-spam v2 (T1H-005): akun bermasalah (skor ≥50 dari velocity + report 24 jam)
 menjawab `429 POW_REQUIRED` + `challenge {token, difficulty, expiresAt}`.
@@ -228,18 +229,18 @@ Never include stack traces in production.
 
 Suggested initial limits:
 
-| Action | Limit |
-|---|---|
-| Auth nonce | 10 / 10 min |
-| Auth verify | 20 / 10 min (T1-023) |
-| Auth refresh | 20 / 10 min (T1-023) |
-| Auth logout | 30 / 10 min (T1-023) |
-| Confession | 3 / hour |
-| Whisper | 10 / hour |
-| Reaction | 60 / hour |
-| Report | 10 / hour + dup per-target 10 min (T1-027) |
+| Action       | Limit                                      |
+| ------------ | ------------------------------------------ |
+| Auth nonce   | 10 / 10 min                                |
+| Auth verify  | 20 / 10 min (T1-023)                       |
+| Auth refresh | 20 / 10 min (T1-023)                       |
+| Auth logout  | 30 / 10 min (T1-023)                       |
+| Confession   | 3 / hour                                   |
+| Whisper      | 10 / hour                                  |
+| Reaction     | 60 / hour                                  |
+| Report       | 10 / hour + dup per-target 10 min (T1-027) |
 
-These are starting values and should be tuned from abuse data.
+These are starting values and should be tuned from abuse data. Sliding window log implementation (T1H-002) prevents boundary bursts.
 
 ## 12. Idempotency
 

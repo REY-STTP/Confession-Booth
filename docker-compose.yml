@@ -1,4 +1,5 @@
 services:
+  services:
   postgres:
     image: postgres:16-alpine
     container_name: booth-postgres
@@ -13,6 +14,12 @@ services:
       - booth-pgdata:/var/lib/postgresql/data
       # Backup harian (T1-040): mount direktori backup host.
       - ./backups:/backups
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-booth} -d ${POSTGRES_DB:-booth}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   api:
     build:
@@ -20,7 +27,8 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: booth-api
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       # Wajib (boot fatal di production bila kosong — config.ts):
       DATABASE_URL: ${DATABASE_URL:-postgres://booth:booth@postgres:5432/booth}
@@ -46,6 +54,12 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - '4000:4000'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   web:
     build:

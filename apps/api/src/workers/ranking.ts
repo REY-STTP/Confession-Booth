@@ -61,7 +61,8 @@ export async function rankingTick(db = getDb(), batch = 500): Promise<RankingRep
       LEFT JOIN (
         SELECT r.confession_id, count(*) AS new_reactions
         FROM reactions r JOIN users us ON us.id = r.user_id
-        WHERE us.created_at > now() - interval '7 days'
+        -- T1H-002: gunakan wallet_first_tx_at (first on-chain tx) jika ada, fallback ke us.created_at
+        WHERE COALESCE(us.wallet_first_tx_at, us.created_at) > now() - interval '7 days'
         GROUP BY 1
       ) nr ON nr.confession_id = c.id
       LEFT JOIN (
@@ -88,9 +89,17 @@ export async function rankingTick(db = getDb(), batch = 500): Promise<RankingRep
     const understand = Math.min(Number(row.understand), 500);
     const total = reactions + whispers;
     const engagement = reactions + whispers;
-    const newShare = engagement > 0 ? Math.min(Number(row.new_account_reactions), 500) / engagement : 0;
+    const newShare =
+      engagement > 0 ? Math.min(Number(row.new_account_reactions), 500) / engagement : 0;
     const openReports = Number(row.open_reports);
-    const ts = trendingScoreV2({ reactions, whispers, uniqueEngagement: unique, ageHours, newAccountShare: newShare, openReports });
+    const ts = trendingScoreV2({
+      reactions,
+      whispers,
+      uniqueEngagement: unique,
+      ageHours,
+      newAccountShare: newShare,
+      openReports,
+    });
     const rs = relatableScoreV2({ understand, total, ageHours, openReports });
     await db.execute(sql`
       INSERT INTO feed_scores (confession_id, score_type, score, calculated_at)

@@ -5,7 +5,7 @@
 // - Raw signature/nonce TIDAK disimpan lebih lama dari operasional (nonce hash saja).
 
 import { randomBytes, createHash } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { getAddress, isAddress, verifyMessage } from 'viem';
 import * as schema from './db/schema.js';
@@ -56,12 +56,17 @@ export function buildMessage(p: {
 /** Terbitkan challenge baru. Address dinormalisasi lowercase (SCHEMA §3).
  *  T1-023: address wajib, chainId wajib valid (integer positif, allowlist = config.chainId). */
 export async function issueNonce(db: NodePgDatabase<typeof schema>, p: ChallengeParams) {
-  if (!p.address || !isAddress(p.address)) throw new AuthError('INVALID_ADDRESS', 'Invalid wallet address.', 400);
+  if (!p.address || !isAddress(p.address))
+    throw new AuthError('INVALID_ADDRESS', 'Invalid wallet address.', 400);
   const address = p.address.toLowerCase();
   const checksum = getAddress(address);
   const domain = p.domain ?? config.appDomain;
   const chainId = p.chainId ?? config.chainId;
-  if (!Number.isInteger(chainId) || (chainId as number) <= 0 || !Number.isSafeInteger(chainId as number)) {
+  if (
+    !Number.isInteger(chainId) ||
+    (chainId as number) <= 0 ||
+    !Number.isSafeInteger(chainId as number)
+  ) {
     throw new AuthError('INVALID_CHAIN', 'Invalid chain id.', 400);
   }
   if ((chainId as number) !== config.chainId) {
@@ -110,10 +115,14 @@ export async function verifyAndLogin(
   const row = rows[0];
   if (!row) throw new AuthError('UNKNOWN_NONCE', 'Unknown or invalid challenge.', 401);
   if (row.consumedAt) throw new AuthError('NONCE_REUSED', 'Challenge already used.', 401);
-  if (row.expiresAt.getTime() <= now) throw new AuthError('NONCE_EXPIRED', 'Challenge expired.', 401);
-  if (row.domain !== config.appDomain) throw new AuthError('WRONG_DOMAIN', 'Challenge domain mismatch.', 401);
-  if (row.address !== address) throw new AuthError('ADDRESS_MISMATCH', 'Challenge address mismatch.', 401);
-  if (row.chainId !== config.chainId) throw new AuthError('INVALID_CHAIN', 'Challenge chain mismatch.', 401);
+  if (row.expiresAt.getTime() <= now)
+    throw new AuthError('NONCE_EXPIRED', 'Challenge expired.', 401);
+  if (row.domain !== config.appDomain)
+    throw new AuthError('WRONG_DOMAIN', 'Challenge domain mismatch.', 401);
+  if (row.address !== address)
+    throw new AuthError('ADDRESS_MISMATCH', 'Challenge address mismatch.', 401);
+  if (row.chainId !== config.chainId)
+    throw new AuthError('INVALID_CHAIN', 'Challenge chain mismatch.', 401);
 
   const message = buildMessage({
     domain: row.domain,
@@ -154,15 +163,26 @@ export async function verifyAndLogin(
       .limit(1);
     let u = found[0];
     if (!u) {
+      // First login: set wallet_first_tx_at to now (wallet age = first on-chain interaction)
       const ins = await tx
         .insert(schema.users)
-        .values({ walletAddress: address, chainId: row.chainId, lastSeenAt: new Date(now) })
+        .values({
+          walletAddress: address,
+          chainId: row.chainId,
+          lastSeenAt: new Date(now),
+          walletFirstTxAt: new Date(now),
+        })
         .returning();
       u = ins[0];
     } else {
+      // Update lastSeenAt and chainId; only set wallet_first_tx_at if null (first verified login)
       const upd = await tx
         .update(schema.users)
-        .set({ lastSeenAt: new Date(now), chainId: row.chainId })
+        .set({
+          lastSeenAt: new Date(now),
+          chainId: row.chainId,
+          ...(u.walletFirstTxAt === null ? { walletFirstTxAt: new Date(now) } : {}),
+        })
         .where(eq(schema.users.id, u.id))
         .returning();
       u = upd[0];
@@ -191,7 +211,10 @@ export interface AuthContext {
 }
 
 /** Resolve Bearer token → konteks user, atau null bila tidak valid. */
-export async function authenticate(db: NodePgDatabase<typeof schema>, rawToken: string): Promise<AuthContext | null> {
+export async function authenticate(
+  db: NodePgDatabase<typeof schema>,
+  rawToken: string,
+): Promise<AuthContext | null> {
   const rows = await db
     .select({ session: schema.sessions, user: schema.users })
     .from(schema.sessions)
@@ -210,48 +233,75 @@ export async function authenticate(db: NodePgDatabase<typeof schema>, rawToken: 
   };
 }
 
-export async function revokeToken(db: NodePgDatabase<typeof schema>, rawToken: string): Promise<void> {
+export async function revokeToken(
+  db: NodePgDatabase<typeof schema>,
+  rawToken: string,
+): Promise<void> {
   await db
     .update(schema.sessions)
     .set({ revokedAt: new Date() })
-    .where(and(eq(schema.sessions.tokenHash, sha256hex(rawToken)), isNull(schema.sessions.revokedAt)));
+    .where(
+      and(eq(schema.sessions.tokenHash, sha256hex(rawToken)), isNull(schema.sessions.revokedAt)),
+    );
 }
 
-/** Refresh: tukar refresh token dengan pasangan baru (rotasi). */
+/** Refresh: tukar refresh token dengan pasangan baru (rotasi).
+ *  Race-condition safe: SELECT FOR UPDATE di dalam transaksi atomik. */
 export async function rotateRefresh(
   db: NodePgDatabase<typeof schema>,
   rawRefresh: string,
   now = Date.now(),
-): Promise<{ accessToken: string; accessExpiresAt: string; refreshToken: string; refreshExpiresAt: string }> {
-  const rows = await db
-    .select({ session: schema.sessions, user: schema.users })
-    .from(schema.sessions)
-    .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
-    .where(eq(schema.sessions.tokenHash, sha256hex(rawRefresh)))
-    .limit(1);
-  const row = rows[0];
-  if (!row || row.session.revokedAt || row.session.expiresAt.getTime() <= now) {
-    throw new AuthError('INVALID_REFRESH', 'Invalid refresh token.', 401);
-  }
-  // T1-023: akun BANNED/RESTRICTED tidak boleh rotate refresh.
-  if (row.user.status !== 'ACTIVE') {
-    throw new AuthError('FORBIDDEN', 'Account restricted.', 403);
-  }
-  // Refresh token harus berumur panjang — tolak token akses (sisa < 25 jam) sebagai refresh.
-  const remaining = row.session.expiresAt.getTime() - now;
-  if (remaining < 25 * 3600_000) throw new AuthError('INVALID_REFRESH', 'Invalid refresh token.', 401);
-
+): Promise<{
+  accessToken: string;
+  accessExpiresAt: string;
+  refreshToken: string;
+  refreshExpiresAt: string;
+}> {
+  const tokenHash = sha256hex(rawRefresh);
   const accessToken = randomBytes(32).toString('hex');
   const nextRefresh = randomBytes(32).toString('hex');
   const accessExpiresAt = new Date(now + config.accessTtlMs);
   const refreshExpiresAt = new Date(now + config.refreshTtlMs);
-  await db.transaction(async (tx) => {
-    await tx.update(schema.sessions).set({ revokedAt: new Date(now) }).where(eq(schema.sessions.id, row.session.id));
+
+  // Seluruh operasi dalam satu transaksi serializable: SELECT FOR UPDATE -> revoke -> insert
+  const result = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select({ session: schema.sessions, user: schema.users })
+      .from(schema.sessions)
+      .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
+      .where(eq(schema.sessions.tokenHash, tokenHash))
+      .limit(1)
+      .for('update'); // Lock row sampai transaksi selesai
+
+    const row = rows[0];
+    if (!row || row.session.revokedAt || row.session.expiresAt.getTime() <= now) {
+      throw new AuthError('INVALID_REFRESH', 'Invalid refresh token.', 401);
+    }
+    // T1-023: akun BANNED/RESTRICTED tidak boleh rotate refresh.
+    if (row.user.status !== 'ACTIVE') {
+      throw new AuthError('FORBIDDEN', 'Account restricted.', 403);
+    }
+    // Refresh token harus berumur panjang — tolak token akses (sisa < 25 jam) sebagai refresh.
+    const remaining = row.session.expiresAt.getTime() - now;
+    if (remaining < 25 * 3600_000)
+      throw new AuthError('INVALID_REFRESH', 'Invalid refresh token.', 401);
+
+    // Revoke old token
+    await tx
+      .update(schema.sessions)
+      .set({ revokedAt: new Date(now) })
+      .where(eq(schema.sessions.id, row.session.id));
+
+    // Insert new tokens atomically
     await tx.insert(schema.sessions).values([
       { userId: row.user.id, tokenHash: sha256hex(accessToken), expiresAt: accessExpiresAt },
       { userId: row.user.id, tokenHash: sha256hex(nextRefresh), expiresAt: refreshExpiresAt },
     ]);
+
+    return row.user.id; // return userId untuk konfirmasi
   });
+
+  // Jika sampai sini, transaksi sukses
   return {
     accessToken,
     accessExpiresAt: accessExpiresAt.toISOString(),
@@ -266,11 +316,13 @@ export async function cleanupAuthExpired(
   now = Date.now(),
 ): Promise<{ nonces: number; sessions: number }> {
   const { lt } = await import('drizzle-orm');
-  const n = await db.delete(schema.authNonces).where(lt(schema.authNonces.expiresAt, new Date(now)));
-  const s = await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date(now - 7 * 24 * 3600_000)));
-  void n;
-  void s;
-  return { nonces: 0, sessions: 0 };
+  const noncesResult = await db
+    .delete(schema.authNonces)
+    .where(lt(schema.authNonces.expiresAt, new Date(now)));
+  const sessionsResult = await db
+    .delete(schema.sessions)
+    .where(lt(schema.sessions.expiresAt, new Date(now - 7 * 24 * 3600_000)));
+  return { nonces: noncesResult.rowCount ?? 0, sessions: sessionsResult.rowCount ?? 0 };
 }
 
 /** T1-023: batasi sesi aktif per user (revoke tertua bila > 20). */
@@ -279,12 +331,31 @@ export async function enforceSessionCap(
   userId: string,
   cap = 20,
 ): Promise<void> {
+  // Gunakan Drizzle ORM: subquery untuk dapatkan ID sesi tertua yang melebihi cap
   const { sql } = await import('drizzle-orm');
-  await db.execute(sql`
-    UPDATE sessions SET revoked_at = now() WHERE id IN (
-      SELECT id FROM sessions
-      WHERE user_id = ${userId}::uuid AND revoked_at IS NULL AND expires_at > now()
-      ORDER BY created_at DESC OFFSET ${cap}
+  const oldestSessions = await db
+    .select({ id: schema.sessions.id })
+    .from(schema.sessions)
+    .where(
+      and(
+        eq(schema.sessions.userId, userId),
+        isNull(schema.sessions.revokedAt),
+        gt(schema.sessions.expiresAt, new Date()),
+      ),
     )
-  `);
+    .orderBy(desc(schema.sessions.createdAt))
+    .offset(cap)
+    .limit(100); // safety limit
+
+  if (oldestSessions.length > 0) {
+    await db
+      .update(schema.sessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        inArray(
+          schema.sessions.id,
+          oldestSessions.map((s) => s.id),
+        ),
+      );
+  }
 }

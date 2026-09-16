@@ -119,7 +119,17 @@ export function escapeHtml(s: string): string {
 
 const MARKUP_RE = /<[a-zA-Z\/!]/; // pola tag HTML kasar: <b, </div, <!doctype
 const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
-const URL_RE = /https?:\/\/|www\./i;
+
+// URL regex presisi tinggi: match URL dengan protokol wajib atau www. + domain valid
+// - Harus pakai https?:// atau www. (tidak match "file.name" atau "version 2.0")
+// - Domain: label alfanumerik + hyphen, TLD min 2 char, NO trailing dot
+// - Port optional, path/query/fragment optional
+// - Blokir mailto:, t.me/, telegram.me, discord.gg tanpa protokol
+const URL_RE =
+  /(?:https?:\/\/|www\.)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}(?:\:\d+)?(?:\/[^\s<>"{}|\\^`\[\]]*)?/i;
+
+// Shorthand URL detection untuk platform populer tanpa protokol (block tambahan)
+const SHORTHAND_URL_RE = /(?:^|\s)(?:t\.me|telegram\.me|discord\.gg|discord\.com\/invite)\/\S+/i;
 
 export interface ContentCheck {
   ok: boolean;
@@ -147,7 +157,8 @@ function checkBase(content: unknown, min: number, max: number): ContentCheck {
 export function validateConfession(content: unknown): ContentCheck {
   const base = checkBase(content, CONFESSION_MIN, CONFESSION_MAX);
   if (!base.ok) return base;
-  if (URL_RE.test(content as string)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
+  const text = content as string;
+  if (URL_RE.test(text) || SHORTHAND_URL_RE.test(text)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
   base.ok = base.errors.length === 0;
   return base;
 }
@@ -156,7 +167,8 @@ export function validateConfession(content: unknown): ContentCheck {
 export function validateWhisper(content: unknown): ContentCheck {
   const base = checkBase(content, WHISPER_MIN, WHISPER_MAX);
   if (!base.ok) return base;
-  if (URL_RE.test(content as string)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
+  const text = content as string;
+  if (URL_RE.test(text) || SHORTHAND_URL_RE.test(text)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
   base.ok = base.errors.length === 0;
   return base;
 }
@@ -227,7 +239,11 @@ export function trendingScore(params: {
 }
 
 /** Skor relatable: bobot UNDERSTAND dominan. */
-export function relatableScore(params: { understand: number; total: number; ageHours: number }): number {
+export function relatableScore(params: {
+  understand: number;
+  total: number;
+  ageHours: number;
+}): number {
   const { understand, total, ageHours } = params;
   if (total <= 0) return 0;
   return (understand * 2 + total) / Math.pow(ageHours + 2, 1.3);

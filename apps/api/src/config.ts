@@ -37,6 +37,14 @@ export const config = {
   accessTtlMs: 60 * 60 * 1000, // 1 jam
   refreshTtlMs: 30 * 24 * 3600 * 1000, // 30 hari
   nonceTtlMs: 5 * 60 * 1000, // 5 menit
+  // Publisher gas/nonce management (T1H-002)
+  publisherMaxFeePerGas: process.env.PUBLISHER_MAX_FEE_PER_GAS
+    ? BigInt(process.env.PUBLISHER_MAX_FEE_PER_GAS)
+    : undefined,
+  publisherMaxPriorityFeePerGas: process.env.PUBLISHER_MAX_PRIORITY_FEE_PER_GAS
+    ? BigInt(process.env.PUBLISHER_MAX_PRIORITY_FEE_PER_GAS)
+    : undefined,
+  publisherUseNonceManager: process.env.PUBLISHER_USE_NONCE_MANAGER === 'true',
 };
 
 export { required };

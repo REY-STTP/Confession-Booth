@@ -43,8 +43,22 @@ export async function abuseTick(db = getDb()): Promise<AbuseReport> {
       RETURNING c.id
     `),
   );
-  if (quarantined.length > 0) feedCacheInvalidate();
-  return { rescored: rescored.length, quarantined: quarantined.length };
+  // T1H-005: juga quarantine whispers dengan 3+ report kritis
+  const whisperQuarantined = rowsOf<{ id: string }>(
+    await db.execute(sql`
+      UPDATE whispers w SET status = 'QUARANTINED'
+      WHERE w.status = 'VISIBLE' AND w.id IN (
+        SELECT target_id FROM reports
+        WHERE target_type = 'WHISPER' AND status IN ('OPEN', 'REVIEWING')
+          AND reason_code IN ('THREAT', 'DOXXING', 'SEXUAL_EXPLOITATION')
+        GROUP BY 1 HAVING count(*) >= 3
+      )
+      RETURNING w.id
+    `),
+  );
+  const totalQuarantined = quarantined.length + whisperQuarantined.length;
+  if (totalQuarantined > 0) feedCacheInvalidate();
+  return { rescored: rescored.length, quarantined: totalQuarantined };
 }
 
 const isMain = (process.argv[1] ?? '').replace(/\\/g, '/').endsWith('workers/abuse.js');

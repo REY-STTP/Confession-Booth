@@ -38,11 +38,16 @@ Automated triage
 Risk score
     ├── Low → queue
     ├── Medium → priority queue
-    └── Critical → temporary quarantine + human review
+    └── Critical (THREAT/DOXXING/SEXUAL_EXPLOITATION ≥3) → QUARANTINED + human review
     ↓
 Moderator decision
+    ├── DISMISS → VISIBLE
+    ├── HIDE → HIDDEN
+    ├── REMOVE → REMOVED
+    ├── RESTRICT/BAN contributor
+    └── RESTORE → VISIBLE (policy_version wajib)
     ↓
-Audit log
+Audit log (policy_version tercatat)
 ```
 
 ## 5. Moderation Actions
@@ -53,6 +58,14 @@ Audit log
 - restrict contributor;
 - ban contributor;
 - restore content.
+
+Every action must include:
+
+- actor;
+- reason;
+- timestamp;
+- target;
+- policy_version (e.g., `v1.0`).
 
 Do not expose the moderator's identity publicly.
 

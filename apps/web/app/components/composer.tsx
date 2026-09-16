@@ -5,8 +5,17 @@ import { countChars, API_URL } from '@/lib/booth';
 import { useSession, apiFetch } from '@/lib/session';
 
 const CATS = [
-  'love', 'heartbreak', 'secret', 'life', 'school', 'work',
-  'family', 'funny', 'sad', 'deep', 'midnight',
+  'love',
+  'heartbreak',
+  'secret',
+  'life',
+  'school',
+  'work',
+  'family',
+  'funny',
+  'sad',
+  'deep',
+  'midnight',
 ];
 
 /** Composer nyata T1-032 — auth wajib, idempotency UUID, render plaintext. */
@@ -23,8 +32,13 @@ export function ComposerForm() {
 
   function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     // T1-032: blokir paste HTML kaya — tempel sebagai teks biasa.
+    // T1-026: normalize unicode (NFC) + strip control chars
     e.preventDefault();
-    const text = e.clipboardData.getData('text/plain').slice(0, 500);
+    const raw = e.clipboardData.getData('text/plain').slice(0, 500);
+    // Normalize to NFC, strip control chars (keep \n\t)
+    const text = raw
+      .normalize('NFC')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
     const el = e.currentTarget;
     const start = el.selectionStart ?? content.length;
     const end = el.selectionEnd ?? content.length;
@@ -32,31 +46,34 @@ export function ComposerForm() {
   }
 
   async function solvePowBrowser(salt: string, difficulty: number): Promise<string | null> {
-    // PoW client-side T1H-005: sha256(salt:nonce) bit-nol di depan (SubtleCrypto).
-    const enc = new TextEncoder();
-    const target = difficulty;
-    for (let n = 0; n < 2_000_000; n++) {
-      const h = await crypto.subtle.digest('sha256', enc.encode(`${salt}:${n}`));
-      const bytes = new Uint8Array(h);
-      let bits = 0;
-      let ok = true;
-      for (const b of bytes) {
-        for (let i = 7; i >= 0 && bits < target; i--) {
-          if ((b >> i) & 1) {
-            ok = false;
-            break;
-          }
-          bits += 1;
-        }
-        if (!ok || bits >= target) break;
-      }
-      if (ok && bits >= target) return String(n);
-    }
-    return null;
+    // T1H-005: Gunakan Web Worker untuk non-blocking PoW dengan timeout 30s
+    return new Promise<string | null>((resolve) => {
+      const worker = new Worker('/pow-worker.js');
+      const timeoutMs = 30000;
+      const timer = setTimeout(() => {
+        worker.terminate();
+        resolve(null);
+      }, timeoutMs + 1000); // slight buffer
+
+      worker.onmessage = (e) => {
+        clearTimeout(timer);
+        resolve(e.data.nonce);
+        worker.terminate();
+      };
+      worker.onerror = () => {
+        clearTimeout(timer);
+        resolve(null);
+        worker.terminate();
+      };
+      worker.postMessage({ salt, difficulty, timeoutMs });
+    });
   }
 
   async function postConfession(idemKey: string, pow?: string) {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey };
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idemKey,
+    };
     if (pow) headers['x-pow-solution'] = pow;
     return apiFetch('/api/confessions', accessToken, {
       method: 'POST',
@@ -73,14 +90,15 @@ export function ComposerForm() {
       setError('Masuk booth dulu (Enter the Booth) untuk publish.');
       return;
     }
-    if (n < 1) return setError('Tulis dulu pengakuanmu (min 1 karakter).'), setStatus('error');
-    if (n > 500) return setError('Maksimal 500 karakter.'), setStatus('error');
-    if (markup) return setError('HTML tidak diizinkan — tulis teks biasa.'), setStatus('error');
+    if (n < 1) return (setError('Tulis dulu pengakuanmu (min 1 karakter).'), setStatus('error'));
+    if (n > 500) return (setError('Maksimal 500 karakter.'), setStatus('error'));
+    if (markup) return (setError('HTML tidak diizinkan — tulis teks biasa.'), setStatus('error'));
     setStatus('pending');
     try {
-      const idemKey = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const idemKey =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       let res = await postConfession(idemKey);
       // T1H-005: jawab tantangan PoW sekali lalu retry (tanpa provider eksternal).
       if (res.status === 429) {
@@ -95,7 +113,8 @@ export function ComposerForm() {
         }
       }
       if (res.status === 401) throw new Error('UNAUTHORIZED — sesi habis, masuk lagi.');
-      if (res.status === 429) throw new Error('RATE_LIMITED — kebanyakan publish, coba 1 jam lagi.');
+      if (res.status === 429)
+        throw new Error('RATE_LIMITED — kebanyakan publish, coba 1 jam lagi.');
       if (res.status === 409) throw new Error('CONTENT_DUPLICATE — sudah pernah publish ini.');
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
@@ -105,7 +124,9 @@ export function ComposerForm() {
       setPublicId(body.publicId ?? body.id ?? '');
       setStatus('visible');
     } catch (err) {
-      setError(err instanceof Error ? `Gagal terbit (${err.message}).` : 'Gagal terbit. Coba lagi.');
+      setError(
+        err instanceof Error ? `Gagal terbit (${err.message}).` : 'Gagal terbit. Coba lagi.',
+      );
       setStatus('error');
     }
   }
@@ -121,7 +142,9 @@ export function ComposerForm() {
           className="w-full rounded-lg border border-booth-line bg-booth-bg p-2.5"
         >
           {CATS.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>
+              {c}
+            </option>
           ))}
         </select>
       </label>
@@ -139,19 +162,35 @@ export function ComposerForm() {
         />
       </label>
       <div className="flex items-center justify-between text-xs">
-        <span id="counter" className={n > 500 ? 'text-red-400' : 'text-booth-dim'} aria-live="polite">
+        <span
+          id="counter"
+          className={n > 500 ? 'text-red-400' : 'text-booth-dim'}
+          aria-live="polite"
+        >
           {n}/500
         </span>
         <span id="privacy-warn" className="text-booth-dim">
           Jangan tulis nama, alamat, atau info yang mengidentifikasimu.
         </span>
       </div>
-      {error ? <p role="alert" className="text-sm text-red-400">{error}</p> : null}
-      {status === 'pending' ? <p role="status" className="text-sm text-booth-dim">Mempublikasikan… (menunggu konfirmasi)</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-400">
+          {error}
+        </p>
+      ) : null}
+      {status === 'pending' ? (
+        <p role="status" className="text-sm text-booth-dim">
+          Mempublikasikan… (menunggu konfirmasi)
+        </p>
+      ) : null}
       {status === 'visible' ? (
-        <div role="status" className="rounded-lg border border-green-800 bg-green-950 p-3 text-sm text-green-200">
+        <div
+          role="status"
+          className="rounded-lg border border-green-800 bg-green-950 p-3 text-sm text-green-200"
+        >
           <p>
-            Pengakuanmu terbit sebagai <strong>Anonymous</strong>. Tidak ada profil/wallet yang ditampilkan.
+            Pengakuanmu terbit sebagai <strong>Anonymous</strong>. Tidak ada profil/wallet yang
+            ditampilkan.
           </p>
           {publicId ? (
             <p className="mt-1">
@@ -175,7 +214,19 @@ export function ComposerForm() {
 
 /** Modal report mock — 11 reason sesuai MODERATION.md. */
 export function ReportModal({ onClose, targetId }: { onClose: () => void; targetId?: string }) {
-  const reasons = ['SPAM','HARASSMENT','HATE','THREAT','DOXXING','SEXUAL_EXPLOITATION','SELF_HARM','FRAUD','MALWARE','ILLEGAL_ACTIVITY','OTHER'];
+  const reasons = [
+    'SPAM',
+    'HARASSMENT',
+    'HATE',
+    'THREAT',
+    'DOXXING',
+    'SEXUAL_EXPLOITATION',
+    'SELF_HARM',
+    'FRAUD',
+    'MALWARE',
+    'ILLEGAL_ACTIVITY',
+    'OTHER',
+  ];
   const [reason, setReason] = useState('SPAM');
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
@@ -213,7 +264,12 @@ export function ReportModal({ onClose, targetId }: { onClose: () => void; target
   }, [onClose, boxRef, prevFocus]);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Report">
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Report"
+    >
       <div ref={boxRef} className="booth-card w-full max-w-md p-5">
         {!done ? (
           <form
@@ -230,32 +286,71 @@ export function ReportModal({ onClose, targetId }: { onClose: () => void; target
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ targetType: 'CONFESSION', targetId, reason }),
                 });
-                if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error?.code ?? 'REPORT_FAILED');
+                if (!res.ok)
+                  throw new Error(
+                    (await res.json().catch(() => ({})))?.error?.code ?? 'REPORT_FAILED',
+                  );
                 setDone(true);
               } catch (err) {
-                setError(err instanceof Error ? `Gagal kirim report (${err.message}).` : 'Gagal kirim report.');
+                setError(
+                  err instanceof Error
+                    ? `Gagal kirim report (${err.message}).`
+                    : 'Gagal kirim report.',
+                );
               }
             }}
           >
             <h3 className="font-semibold">Something wrong?</h3>
-            <p className="mt-1 text-sm text-booth-dim">Report this confession and our moderation team will review it.</p>
-            {error ? <p role="alert" className="mt-2 text-sm text-red-400">{error}</p> : null}
+            <p className="mt-1 text-sm text-booth-dim">
+              Report this confession and our moderation team will review it.
+            </p>
+            {error ? (
+              <p role="alert" className="mt-2 text-sm text-red-400">
+                {error}
+              </p>
+            ) : null}
             <label className="mt-4 block text-sm">
               <span className="mb-1 block text-booth-dim">Alasan</span>
-              <select value={reason} onChange={(e) => setReason(e.target.value)} className="w-full rounded-lg border border-booth-line bg-booth-bg p-2.5">
-                {reasons.map((r) => <option key={r} value={r}>{r}</option>)}
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full rounded-lg border border-booth-line bg-booth-bg p-2.5"
+              >
+                {reasons.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
               </select>
             </label>
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-booth-line px-4 py-2">Batal</button>
-              <button type="submit" className="flex-1 rounded-lg bg-booth-accent px-4 py-2 font-semibold text-black">Kirim report</button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 rounded-lg border border-booth-line px-4 py-2"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="flex-1 rounded-lg bg-booth-accent px-4 py-2 font-semibold text-black"
+              >
+                Kirim report
+              </button>
             </div>
           </form>
         ) : (
           <div role="status">
             <p className="font-semibold">Report terkirim.</p>
-            <p className="mt-1 text-sm text-booth-dim">Tim moderasi akan meninjau. Identitas pelapor tidak dipublikasikan.</p>
-            <button onClick={onClose} className="mt-4 w-full rounded-lg border border-booth-line px-4 py-2">Tutup</button>
+            <p className="mt-1 text-sm text-booth-dim">
+              Tim moderasi akan meninjau. Identitas pelapor tidak dipublikasikan.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-4 w-full rounded-lg border border-booth-line px-4 py-2"
+            >
+              Tutup
+            </button>
           </div>
         )}
       </div>

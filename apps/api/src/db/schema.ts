@@ -37,7 +37,14 @@ export const confessionStatus = pgEnum('confession_status', [
 export const reactionType = pgEnum('reaction_type', ['UNDERSTAND', 'LOVE', 'SAD', 'WILD', 'FUNNY']);
 export const reportTarget = pgEnum('report_target', ['CONFESSION', 'WHISPER']);
 export const reportStatus = pgEnum('report_status', ['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED']);
-export const modAction = pgEnum('mod_action', ['DISMISS', 'HIDE', 'REMOVE', 'RESTRICT', 'BAN', 'RESTORE']);
+export const modAction = pgEnum('mod_action', [
+  'DISMISS',
+  'HIDE',
+  'REMOVE',
+  'RESTRICT',
+  'BAN',
+  'RESTORE',
+]);
 export const publicationStatus = pgEnum('publication_status', [
   'PENDING_CHAIN',
   'SUBMITTED',
@@ -55,6 +62,8 @@ export const users = pgTable('users', {
   createdAt: ts('created_at').notNull().defaultNow(),
   lastSeenAt: ts('last_seen_at'),
   status: userStatus('status').notNull().default('ACTIVE'),
+  // T1H-002: timestamp of first on-chain transaction (wallet age proxy)
+  walletFirstTxAt: ts('wallet_first_tx_at'),
 });
 
 export const authNonces = pgTable(
@@ -129,7 +138,7 @@ export const confessions = pgTable(
     publishedAt: ts('published_at'),
     hiddenAt: ts('hidden_at'),
     version: integer('version').notNull().default(1),
-    moderationScore: numeric('moderation_score').notNull().default('0'),
+    moderationScore: numeric('moderation_score', { precision: 5, scale: 2 }).notNull().default('0'),
   },
   (t) => [
     index('idx_confessions_feed').on(t.status, t.createdAt),
@@ -192,7 +201,13 @@ export const reports = pgTable(
     createdAt: ts('created_at').notNull().defaultNow(),
     resolvedAt: ts('resolved_at'),
   },
-  (t) => [index('idx_reports_status').on(t.status, t.createdAt)],
+  (t) => [
+    index('idx_reports_status').on(t.status, t.createdAt),
+    // T1-028: Foreign key untuk integritas referensial
+    // Polymorphic FK tidak didukung langsung, gunakan partial index + application-level enforcement
+    // Index untuk performa query moderation queue
+    index('idx_reports_target').on(t.targetType, t.targetId),
+  ],
 );
 
 export const moderationActions = pgTable('moderation_actions', {
@@ -240,7 +255,11 @@ export const rateLimitBuckets = pgTable(
     windowStart: ts('window_start').notNull(),
     count: integer('count').notNull().default(1),
   },
-  (t) => [unique('uq_rate_bucket').on(t.subjectHash, t.action, t.windowStart)],
+  (t) => [
+    unique('uq_rate_bucket').on(t.subjectHash, t.action, t.windowStart),
+    // T1-025: Index untuk cleanup window_start agar tidak full-scan
+    index('idx_ratelimit_window').on(t.windowStart),
+  ],
 );
 
 export const feedScores = pgTable(
@@ -256,7 +275,8 @@ export const feedScores = pgTable(
   (t) => [primaryKey({ columns: [t.confessionId, t.scoreType] })],
 );
 
-export const idempotencyKeys = pgTable(  'idempotency_keys',
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
   {
     key: varchar('key', { length: 128 }).notNull(),
     userId: uuid('user_id')

@@ -25,7 +25,7 @@ The central architectural rule is:
 - Next.js 16.3.x
 - TypeScript
 - Tailwind CSS
-- Native EVM wallet (`window.ethereum` + `personal_sign`; wagmi/React Query ditunda agar build ringan — T1-031)
+- Native EVM wallet (`window.ethereum` + `personal_sign`); wagmi/React Query ditunda agar build ringan — T1-031 native implementasi
 - viem dipakai API untuk verifikasi signature server-side
 
 ### Backend (dikunci T1-028)
@@ -44,7 +44,8 @@ The central architectural rule is:
 
 Preferred:
 
-- content-addressed storage such as IPFS-compatible storage.
+- content-addressed storage such as IPFS-compatible storage (Kubo HTTP API).
+- Abstraction `StorageAdapter {put, get}` untuk migrasi tanpa ubah API; `IpfsHttpAdapter` (T1H-001) + `FallbackStorageAdapter` primer→inline.
 
 Sensitive payloads should be encrypted before decentralized storage where required.
 
@@ -60,6 +61,7 @@ Sensitive payloads should be encrypted before decentralized storage where requir
 - Docker;
 - reverse proxy;
 - managed PostgreSQL or PostgreSQL on VPS;
+- Redis cache (opsional, untuk feed_scores 60s + invalidasi moderasi — T1H-002);
 - monitoring and centralized error reporting with privacy-aware configuration.
 
 ## 3. High-Level Architecture
@@ -420,17 +422,17 @@ Recommended:
 
 ## 17. Architecture Decision Summary
 
-| Decision | Choice |
-|---|---|
-| Public identity | Anonymous pseudonym |
-| Auth | Wallet signature |
-| Content | Off-chain |
-| Proof | On-chain hash/reference |
-| Database | PostgreSQL |
-| Storage | IPFS-compatible |
-| Feed | Cursor pagination |
-| Ranking | Server-side + cache |
-| Moderation | Off-chain |
-| Secrets | Server secret manager/env |
-| Rich text | No in MVP |
-| ZK | Future |
+| Decision        | Choice                    |
+| --------------- | ------------------------- |
+| Public identity | Anonymous pseudonym       |
+| Auth            | Wallet signature          |
+| Content         | Off-chain                 |
+| Proof           | On-chain hash/reference   |
+| Database        | PostgreSQL                |
+| Storage         | IPFS-compatible           |
+| Feed            | Cursor pagination         |
+| Ranking         | Server-side + cache       |
+| Moderation      | Off-chain                 |
+| Secrets         | Server secret manager/env |
+| Rich text       | No in MVP                 |
+| ZK              | Future                    |

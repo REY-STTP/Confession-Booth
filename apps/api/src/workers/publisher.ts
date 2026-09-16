@@ -21,6 +21,11 @@ export interface PublisherEnv extends ChainEnv {
   batch?: number;
   /** Timeout receipt per tx (default 60s; test memakai nilai kecil). */
   receiptTimeoutMs?: number;
+  /** Gas price config untuk EIP-1559 */
+  maxFeePerGas?: bigint;
+  maxPriorityFeePerGas?: bigint;
+  /** Nonce management: manual nonce tracking untuk menghindari stuck tx */
+  useNonceManager?: boolean;
 }
 
 export interface PublisherReport {
@@ -50,9 +55,14 @@ export async function publisherTick(
 ): Promise<PublisherReport> {
   const E: PublisherEnv = env ?? {
     rpcUrl: process.env.RPC_URL ?? '',
-    contractAddress: (config.contractAddress || '0x0000000000000000000000000000000000000000') as Hex,
+    contractAddress: (config.contractAddress ||
+      '0x0000000000000000000000000000000000000000') as Hex,
     chainId: config.chainId,
     publisherKey: (process.env.PUBLISHER_KEY ?? '0x') as Hex,
+    // Gas/nonce config dari config.ts (env vars)
+    maxFeePerGas: config.publisherMaxFeePerGas,
+    maxPriorityFeePerGas: config.publisherMaxPriorityFeePerGas,
+    useNonceManager: config.publisherUseNonceManager,
   };
   if (!E.rpcUrl || !E.publisherKey || E.publisherKey === '0x') {
     console.warn('[publisher] RPC_URL/PUBLISHER_KEY belum di-set — lewati (tetap PENDING_CHAIN).');
@@ -83,15 +93,35 @@ export async function publisherTick(
   const pub = publicClient(E);
   const wallet = walletClient(E, E.publisherKey);
 
+  // T1H-002: Nonce manager untuk menghindari stuck tx
+  let currentNonce: number | null = null;
+  async function getNextNonce(): Promise<number> {
+    if (currentNonce === null) {
+      currentNonce = await pub.getTransactionCount({ address: wallet.account.address });
+    }
+    return currentNonce++;
+  }
+
   for (const p of pending) {
     try {
       let hash = p.transaction_hash as Hex | null;
       if (!hash) {
+        const nonce = E.useNonceManager ? await getNextNonce() : undefined;
+        const gasPriceConfig =
+          E.maxFeePerGas || E.maxPriorityFeePerGas
+            ? {
+                maxFeePerGas: E.maxFeePerGas,
+                maxPriorityFeePerGas: E.maxPriorityFeePerGas,
+              }
+            : undefined;
+
         hash = await wallet.writeContract({
           address: E.contractAddress,
           abi: REGISTRY_ABI,
           functionName: 'publish',
           args: [toBytes32(p.onchain_confession_id), toBytes32(p.content_hash), '', 1],
+          nonce,
+          ...gasPriceConfig,
         });
         await db.execute(sql`
           UPDATE publications SET status = 'SUBMITTED', transaction_hash = ${hash},
@@ -101,9 +131,14 @@ export async function publisherTick(
       }
       const receipt = await pub.waitForTransactionReceipt({
         hash,
-        confirmations: 1,
+        confirmations: 3, // T1H-002: 3 confirmations untuk reorg safety
         timeout: E.receiptTimeoutMs ?? 60_000,
       });
+      // T1H-002: Verify transaction still valid after confirmations (reorg check)
+      const verified = await pub.getTransactionReceipt({ hash });
+      if (!verified || verified.blockNumber !== receipt.blockNumber) {
+        throw new Error('Transaction reorged or replaced');
+      }
       await db.execute(sql`
         UPDATE publications SET status = 'CONFIRMED', block_number = ${Number(receipt.blockNumber)},
           confirmed_at = now(), failure_reason = NULL

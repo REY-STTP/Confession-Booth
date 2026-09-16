@@ -23,11 +23,13 @@ function rowsOf<T>(res: unknown): T[] {
 
 const CURSOR_NAME = 'confession-events';
 const LOOKBACK = 2000n;
+const MISMATCH_ALERT_THRESHOLD = 5; // alert jika mismatch > 5 per tick
 
 export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<IndexerReport> {
   const E: ChainEnv = env ?? {
     rpcUrl: process.env.RPC_URL ?? '',
-    contractAddress: (config.contractAddress || '0x0000000000000000000000000000000000000000') as never,
+    contractAddress: (config.contractAddress ||
+      '0x0000000000000000000000000000000000000000') as never,
     chainId: config.chainId,
   };
   if (!E.rpcUrl) {
@@ -44,7 +46,14 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
   if (from < 0n) from = 0n;
   if (from > latest) from = latest + 1n; // belum ada blok baru
 
-  const report: IndexerReport = { fromBlock: Number(from), toBlock: Number(latest), events: 0, matched: 0, mismatched: 0 };
+  const report: IndexerReport = {
+    fromBlock: Number(from),
+    toBlock: Number(latest),
+    events: 0,
+    matched: 0,
+    mismatched: 0,
+  };
+  let mismatchCount = 0;
   if (from <= latest) {
     const logs = await pub.getLogs({
       address: E.contractAddress,
@@ -65,7 +74,18 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
       if (!found) continue; // event asing (bukan dari booth ini) — abaikan
       if (!eqBytes32(found.content_hash, a.contentHash)) {
         report.mismatched += 1;
+        mismatchCount++;
         console.warn(`[indexer] hash mismatch ${a.confessionId}`);
+        // Persist mismatch untuk investigasi
+        await db
+          .execute(
+            sql`
+          INSERT INTO indexer_mismatches (confession_id, onchain_hash, db_hash, block_number, tx_hash, detected_at)
+          VALUES (${a.confessionId}, ${a.contentHash}, ${found.content_hash}, ${Number(log.blockNumber)}, ${log.transactionHash}, now())
+          ON CONFLICT DO NOTHING
+        `,
+          )
+          .catch(() => {}); // ignore if table doesn't exist
         continue;
       }
       if (found.status !== 'CONFIRMED') {
@@ -76,13 +96,26 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
         `);
       }
       report.matched += 1;
+      // T1H-002: Per-event cursor update untuk safety - update cursor per event
+      await db.execute(sql`
+        INSERT INTO indexer_state (name, last_block) VALUES (${CURSOR_NAME}, ${Number(log.blockNumber)})
+        ON CONFLICT (name) DO UPDATE SET last_block = EXCLUDED.last_block, updated_at = now()
+      `);
+    }
+    // Alert jika mismatch melebihi threshold
+    if (mismatchCount > MISMATCH_ALERT_THRESHOLD) {
+      console.error(`[INDEXER ALERT] ${mismatchCount} hash mismatch(es) detected in this tick`);
+      // TODO: integrate with alerting system (Slack, Discord, PagerDuty, etc.)
     }
   }
 
-  await db.execute(sql`
-    INSERT INTO indexer_state (name, last_block) VALUES (${CURSOR_NAME}, ${Number(latest)})
-    ON CONFLICT (name) DO UPDATE SET last_block = EXCLUDED.last_block, updated_at = now()
-  `);
+  // Final cursor update hanya jika tidak ada event baru (fallback untuk memastikan cursor maju)
+  if (report.events === 0 && from <= latest) {
+    await db.execute(sql`
+      INSERT INTO indexer_state (name, last_block) VALUES (${CURSOR_NAME}, ${Number(latest)})
+      ON CONFLICT (name) DO UPDATE SET last_block = EXCLUDED.last_block, updated_at = now()
+    `);
+  }
   return report;
 }
 

@@ -46,6 +46,23 @@ STORAGE_API_KEY=
 STORAGE_API_SECRET=
 
 ADMIN_SECRET=
+
+# Publisher gas/nonce management (T1H-002)
+PUBLISHER_MAX_FEE_PER_GAS=
+PUBLISHER_MAX_PRIORITY_FEE_PER_GAS=
+PUBLISHER_USE_NONCE_MANAGER=
+
+# Body limit (T1-024)
+BODY_LIMIT=102400
+
+# Redis cache (T1H-002)
+REDIS_URL=
+
+# PoW difficulty (T1H-005)
+POW_DIFFICULTY=14
+
+# CAPTCHA provider (T1H-005)
+CAPTCHA_SECRET=
 ```
 
 Never expose server-only variables through `NEXT_PUBLIC_*`.

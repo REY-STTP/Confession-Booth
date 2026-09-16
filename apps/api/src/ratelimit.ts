@@ -1,6 +1,7 @@
-// Rate limiter fixed-window berbasis DB (SCHEMA §14 rate_limit_buckets).
+// Rate limiter sliding-window berbasis DB (SCHEMA §14 rate_limit_buckets).
 // - subject mentah (IP/user) TIDAK disimpan — hanya sha256(subject).
 // - Batas default dari API.md §11.
+// T1H-002: Sliding window log implementation untuk mencegah burst di boundary window.
 import { createHash } from 'node:crypto';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
@@ -11,11 +12,11 @@ export const LIMITS = {
   verify: { limit: 20, windowMs: 10 * 60_000 },
   refresh: { limit: 20, windowMs: 10 * 60_000 },
   logout: { limit: 30, windowMs: 10 * 60_000 },
-  admin: { limit: 10, windowMs: 10 * 60_000 },
   confess: { limit: 3, windowMs: 3600_000 },
   whisper: { limit: 10, windowMs: 3600_000 },
   react: { limit: 60, windowMs: 3600_000 },
   report: { limit: 10, windowMs: 3600_000 },
+  admin: { limit: 10, windowMs: 10 * 60_000 },
 } as const;
 
 export type RateAction = keyof typeof LIMITS;
@@ -29,7 +30,8 @@ export interface RateResult {
   retryAfterSec: number;
 }
 
-/** Naikkan counter; ok=false bila melewati limit. Bersihkan window lama milik subject+action yang sama. */
+/** Sliding window log atomik: DELETE + COUNT + INSERT dalam satu transaksi serializable.
+ *  Mencegah burst di boundary window & race condition konkuren. */
 export async function checkRateLimit(
   db: NodePgDatabase<typeof schema>,
   subject: string,
@@ -38,24 +40,55 @@ export async function checkRateLimit(
 ): Promise<RateResult> {
   const { limit, windowMs } = LIMITS[action];
   const subjectHash = hashSubject(subject);
-  const windowStart = new Date(Math.floor(now / windowMs) * windowMs);
+  const windowStart = now - windowMs;
+  const windowStartIso = new Date(windowStart).toISOString();
+  const nowIso = new Date(now).toISOString();
 
-  await db.execute(sql`
-    DELETE FROM rate_limit_buckets
-    WHERE subject_hash = ${subjectHash} AND action = ${action} AND window_start < ${windowStart.toISOString()}::timestamptz
-  `);
+  // Gunakan transaksi untuk atomicity: hapus expired, hitung, insert baru
+  const result = await db.transaction(async (tx) => {
+    // 1. Hapus entry di luar window
+    await tx.execute(sql`
+      DELETE FROM rate_limit_buckets
+      WHERE subject_hash = ${subjectHash}
+        AND action = ${action}
+        AND window_start < ${windowStartIso}::timestamptz
+    `);
 
-  const res = await db.execute<{ count: number }>(sql`
-    INSERT INTO rate_limit_buckets (subject_hash, action, window_start, count)
-    VALUES (${subjectHash}, ${action}, ${windowStart.toISOString()}::timestamptz, 1)
-    ON CONFLICT (subject_hash, action, window_start)
-    DO UPDATE SET count = rate_limit_buckets.count + 1
-    RETURNING count
-  `);
-  // node-postgres mengembalikan QueryResult { rows } — bukan array langsung.
-  const rows = (res as unknown as { rows: Array<{ count: number | string }> }).rows ?? [];
-  const count = Number(rows[0]?.count ?? 1);
-  if (count <= limit) return { ok: true, retryAfterSec: 0 };
-  const retryAfterSec = Math.max(1, Math.ceil((windowStart.getTime() + windowMs - now) / 1000));
-  return { ok: false, retryAfterSec };
+    // 2. Hitung request dalam window sliding
+    const countRes = await tx.execute(sql`
+      SELECT COUNT(*) as cnt FROM rate_limit_buckets
+      WHERE subject_hash = ${subjectHash}
+        AND action = ${action}
+        AND window_start >= ${windowStartIso}::timestamptz
+    `);
+
+    const currentCount = Number((countRes as any).rows?.[0]?.cnt ?? 0);
+
+    if (currentCount >= limit) {
+      // Limit tercapai: cari request tertua untuk retry-after
+      const oldestRes = await tx.execute(sql`
+        SELECT window_start FROM rate_limit_buckets
+        WHERE subject_hash = ${subjectHash}
+          AND action = ${action}
+        ORDER BY window_start ASC LIMIT 1
+      `);
+
+      const oldest = (oldestRes as any).rows?.[0]?.window_start;
+      const retryAfterSec = oldest
+        ? Math.max(1, Math.ceil((new Date(oldest).getTime() + windowMs - now) / 1000))
+        : Math.ceil(windowMs / 1000);
+
+      return { ok: false, retryAfterSec };
+    }
+
+    // 3. Tambah entry baru (baru insert kalau lolos limit)
+    await tx.execute(sql`
+      INSERT INTO rate_limit_buckets (subject_hash, action, window_start)
+      VALUES (${subjectHash}, ${action}, ${nowIso}::timestamptz)
+    `);
+
+    return { ok: true, retryAfterSec: 0 };
+  });
+
+  return result;
 }

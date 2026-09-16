@@ -56,23 +56,28 @@ export async function withIdempotency<T>(
       key: normKey,
       userId,
       statusCode: out.statusCode,
-      response: out.body as Record<string, unknown>,
+      response: out.body as Record<string, unknown>, // SIMPAN HANYA body, bukan wrapper
       expiresAt: new Date(now + IDEMPOTENCY_TTL_MS),
     });
-    return { replay: false, ...out };
+    // Return body langsung (bukan wrapper) agar konsisten dengan replay
+    return { replay: false, statusCode: out.statusCode, body: out.body };
   } catch (e) {
     // Hanya 23505 (unique violation) yang berarti kalah balapan.
     // Error lain (FK, koneksi) wajib dilempar asli agar tidak menyesatkan.
-    const code = (e as { cause?: { code?: string }; code?: string })?.cause?.code
-      ?? (e as { code?: string })?.code;
+    const code =
+      (e as { cause?: { code?: string }; code?: string })?.cause?.code ??
+      (e as { code?: string })?.code;
     if (code !== undefined && code !== '23505') throw e;
     // Kalah balapan: baca milik pemenang.
     const winner = await db
       .select()
       .from(schema.idempotencyKeys)
-      .where(and(eq(schema.idempotencyKeys.key, normKey), eq(schema.idempotencyKeys.userId, userId)))
+      .where(
+        and(eq(schema.idempotencyKeys.key, normKey), eq(schema.idempotencyKeys.userId, userId)),
+      )
       .limit(1);
-    if (winner[0]) return { replay: true, statusCode: winner[0].statusCode, body: winner[0].response as T };
+    if (winner[0])
+      return { replay: true, statusCode: winner[0].statusCode, body: winner[0].response as T };
     throw e instanceof Error ? e : new Error('IDEMPOTENCY_RACE_UNRESOLVED');
   }
 }

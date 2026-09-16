@@ -31,7 +31,14 @@ import {
   snippet,
   type ConfessionRow,
 } from './content.js';
-import { checkContent, isCategory, isReaction, isReason, CONFESSION_MAX, WHISPER_MAX } from './validate.js';
+import {
+  checkContent,
+  isCategory,
+  isReaction,
+  isReason,
+  CONFESSION_MAX,
+  WHISPER_MAX,
+} from './validate.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -87,7 +94,15 @@ export function escapeLike(s: string): string {
 /** T1-023: CSRF origin-check untuk endpoint cookie (refresh/logout). */
 function checkCsrf(req: FastifyRequest, reply: FastifyReply): boolean {
   const origin = req.headers.origin as string | undefined;
-  if (!origin) return true; // non-browser / same-origin tanpa Origin: izinkan (SameSite=Lax tetap proteksi)
+  // Reject requests with missing or null origin for cookie-based endpoints
+  if (!origin || origin === 'null') {
+    reply
+      .code(403)
+      .send({
+        error: { code: 'FORBIDDEN', message: 'Origin header required for cookie endpoints.' },
+      });
+    return false;
+  }
   try {
     const o = new URL(origin);
     const allowed = new Set(config.corsOrigin.map((s) => s.trim()).filter(Boolean));
@@ -122,17 +137,34 @@ const feedQuery = z.object({
 const CRITICAL_REASONS = new Set(['THREAT', 'DOXXING', 'SEXUAL_EXPLOITATION']);
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true, bodyLimit: 102_400, trustProxy: true, routerOptions: { maxParamLength: 128 } });
+  const bodyLimit = Number(process.env.BODY_LIMIT ?? 102_400);
+  const app = Fastify({
+    logger: true,
+    bodyLimit,
+    trustProxy: true,
+    routerOptions: { maxParamLength: 128 },
+  });
 
   // T1-024: error JSON konsisten, tanpa stack/HTML leak.
   app.setErrorHandler((err, _req, reply) => {
-    const status = typeof (err as { statusCode?: unknown }).statusCode === 'number'
-      ? (err as { statusCode: number }).statusCode
-      : 500;
+    const status =
+      typeof (err as { statusCode?: unknown }).statusCode === 'number'
+        ? (err as { statusCode: number }).statusCode
+        : 500;
     if (status >= 500) app.log.error(err);
     const msg = err instanceof Error ? err.message : 'Error';
     reply.code(status >= 400 && status < 600 ? status : 500).send({
-      error: { code: status === 400 ? 'BAD_REQUEST' : status === 404 ? 'NOT_FOUND' : status === 429 ? 'RATE_LIMITED' : 'INTERNAL', message: status >= 500 ? 'Internal error.' : (msg || 'Error') },
+      error: {
+        code:
+          status === 400
+            ? 'BAD_REQUEST'
+            : status === 404
+              ? 'NOT_FOUND'
+              : status === 429
+                ? 'RATE_LIMITED'
+                : 'INTERNAL',
+        message: status >= 500 ? 'Internal error.' : msg || 'Error',
+      },
     });
   });
   app.setNotFoundHandler((_req, reply) => {
@@ -141,10 +173,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cors, { origin: config.corsOrigin, credentials: true });
   await app.register(cookie);
-  // T1-041: request-id di semua respons; logger Fastify default hanya method/url/status
+  // T1-041: request-id di semua respons; gunakan crypto.randomUUID untuk non-predictable ID
   // (tidak log body → isi confession/signature aman). Serializer redaksi header sensitif.
   app.addHook('onRequest', async (req, reply) => {
-    reply.header('x-request-id', req.id);
+    const requestId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    reply.header('x-request-id', requestId);
   });
   app.addHook('onResponse', async (req, reply) => {
     const { recordRequest } = await import('./metrics.js');
@@ -176,7 +212,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     reply: FastifyReply,
   ): req is FastifyRequest & { user: AuthContext } {
     if (!req.user) {
-      reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Authentication required.' } });
+      reply
+        .code(401)
+        .send({ error: { code: 'UNAUTHORIZED', message: 'Authentication required.' } });
       return false;
     }
     if (req.user.status !== 'ACTIVE') {
@@ -209,7 +247,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/health/chain', async () => ({
     ok: true,
     chainId: String(config.chainId),
-    contractConfigured: Boolean(config.contractAddress && !config.contractAddress.startsWith('0x0000')),
+    contractConfigured: Boolean(
+      config.contractAddress && !config.contractAddress.startsWith('0x0000'),
+    ),
     // JANGAN pernah expose RPC_URL / kunci di sini.
   }));
 
@@ -239,23 +279,32 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/auth/nonce', async (req, reply) => {
     if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'nonce'))) return;
     const parsed = z
-      .object({ address: z.string().regex(/^0x[a-fA-F0-9]{40}$/), chainId: z.coerce.number().int().positive().safe().optional() })
+      .object({
+        address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+        chainId: z.coerce.number().int().positive().safe().optional(),
+      })
       .safeParse(req.query);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'INVALID_ADDRESS', message: 'Valid wallet address required.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_ADDRESS', message: 'Valid wallet address required.' } });
     }
     const { address, chainId } = parsed.data;
     try {
       return await issueNonce(getDb(), { address, chainId });
     } catch (e) {
-      if (e instanceof AuthError) return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
+      if (e instanceof AuthError)
+        return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
       throw e;
     }
   });
 
   const verifyBody = z.object({
     address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    signature: z.string().regex(/^0x[a-fA-F0-9]+$/).max(1000),
+    signature: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]+$/)
+      .max(1000),
     nonce: z.string().min(16).max(128),
   });
 
@@ -270,7 +319,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'verify'))) return;
     const parsed = verifyBody.safeParse(req.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'INVALID_AUTH', message: 'Invalid credentials.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_AUTH', message: 'Invalid credentials.' } });
     }
     try {
       const s = await verifyAndLogin(getDb(), parsed.data);
@@ -280,7 +331,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       });
       return { authenticated: true, accessToken: s.accessToken, expiresAt: s.accessExpiresAt };
     } catch (e) {
-      if (e instanceof AuthError) return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
+      if (e instanceof AuthError)
+        return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
       throw e;
     }
   });
@@ -289,7 +341,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!checkCsrf(req, reply)) return;
     if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'refresh'))) return;
     const raw = req.cookies['booth_refresh'];
-    if (!raw) return reply.code(401).send({ error: { code: 'INVALID_REFRESH', message: 'Missing refresh token.' } });
+    if (!raw)
+      return reply
+        .code(401)
+        .send({ error: { code: 'INVALID_REFRESH', message: 'Missing refresh token.' } });
     try {
       const s = await rotateRefresh(getDb(), raw);
       reply.setCookie('booth_refresh', s.refreshToken, {
@@ -298,7 +353,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       });
       return { authenticated: true, accessToken: s.accessToken, expiresAt: s.accessExpiresAt };
     } catch (e) {
-      if (e instanceof AuthError) return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
+      if (e instanceof AuthError)
+        return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
       throw e;
     }
   });
@@ -361,7 +417,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     const conds: ReturnType<typeof sql>[] = [sql`c.status = 'VISIBLE'`];
     if (category) conds.push(sql`cat.slug = ${category}`);
     if (slot === 'midnight') {
-      conds.push(sql`(cat.slug = 'midnight' OR EXTRACT(HOUR FROM c.created_at AT TIME ZONE 'Asia/Jakarta') BETWEEN 0 AND 4)`);
+      conds.push(
+        sql`(cat.slug = 'midnight' OR EXTRACT(HOUR FROM c.created_at AT TIME ZONE 'Asia/Jakarta') BETWEEN 0 AND 4)`,
+      );
     }
     // T1H-004: FTS dulu (tsvector simple + GIN), ILIKE+trigram sebagai recall fallback.
     // T1-024: escape LIKE wildcard + tolak q kosong (hindari full-scan ILIKE %%).
@@ -371,17 +429,22 @@ export async function buildApp(): Promise<FastifyInstance> {
       if (trimmed.length < 1) {
         return reply.code(400).send({ error: { code: 'INVALID_QUERY', message: 'Empty search.' } });
       }
-      conds.push(sql`(c.body_tsv @@ plainto_tsquery('simple', ${trimmed}) OR c.body_text ILIKE ${'%' + escapeLike(trimmed) + '%'} ESCAPE '\\')`);
+      conds.push(
+        sql`(c.body_tsv @@ plainto_tsquery('simple', ${trimmed}) OR c.body_text ILIKE ${'%' + escapeLike(trimmed) + '%'} ESCAPE '\\')`,
+      );
       ftsRank = sql`ts_rank(c.body_tsv, plainto_tsquery('simple', ${trimmed}))`;
     }
     let cur: { createdAt: string; id: string } | null = null;
     if (cursor) {
       cur = decodeCursor(cursor);
       if (!cur) {
-        return reply.code(400).send({ error: { code: 'INVALID_CURSOR', message: 'Invalid cursor.' } });
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_CURSOR', message: 'Invalid cursor.' } });
       }
     }
-    if (cur) conds.push(sql`(c.created_at, c.public_id) < (${cur.createdAt}::timestamptz, ${cur.id})`);
+    if (cur)
+      conds.push(sql`(c.created_at, c.public_id) < (${cur.createdAt}::timestamptz, ${cur.id})`);
     const where = sql.join(conds, sql` AND `);
 
     // T1-030: cache memori 60s per kombinasi query (T1H-002: Redis bila REDIS_URL di-set).
@@ -389,9 +452,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     const cached = await feedCacheGet(cacheKey);
     if (cached) return cached as object;
 
-    const rows = rowsOf<
-      ConfessionRow & { id: string }
-    >(
+    const rows = rowsOf<ConfessionRow & { id: string }>(
       await db.execute(sql`
         SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category,
                ${ftsRank} AS rank
@@ -410,7 +471,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     const last = page[page.length - 1];
     const out = {
       items,
-      nextCursor: rows.length > limit && last ? encodeCursor(new Date(last.created_at).toISOString(), last.public_id) : null,
+      nextCursor:
+        rows.length > limit && last
+          ? encodeCursor(new Date(last.created_at).toISOString(), last.public_id)
+          : null,
     };
     await feedCacheSet(cacheKey, out);
     return out;
@@ -439,7 +503,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!found || found.status !== 'VISIBLE') {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
     }
-    const [rmap, wmap] = await Promise.all([reactionMap(db, [found.id]), whisperCountMap(db, [found.id])]);
+    const [rmap, wmap] = await Promise.all([
+      reactionMap(db, [found.id]),
+      whisperCountMap(db, [found.id]),
+    ]);
     return projectConfession(found, rmap.get(found.id) ?? {}, wmap.get(found.id) ?? 0);
   });
 
@@ -493,23 +560,33 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     const parsed = confessBody.safeParse(req.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'INVALID_CONTENT', message: 'Invalid payload.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_CONTENT', message: 'Invalid payload.' } });
     }
     const { category, content } = parsed.data;
     if (!isCategory(category)) {
-      return reply.code(400).send({ error: { code: 'INVALID_CATEGORY', message: 'Invalid category.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_CATEGORY', message: 'Invalid category.' } });
     }
     const v = checkContent(content, CONFESSION_MAX);
     if (!v.ok) {
-      return reply.code(400).send({ error: { code: 'INVALID_CONTENT', message: v.errors.join(',') } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_CONTENT', message: v.errors.join(',') } });
     }
     if (!(await rateLimitOr429(reply, `user:${userId}`, 'confess'))) return;
 
     const cats = rowsOf<{ id: string }>(
-      await db.execute(sql`SELECT id FROM categories WHERE slug = ${category} AND is_active = true LIMIT 1`),
+      await db.execute(
+        sql`SELECT id FROM categories WHERE slug = ${category} AND is_active = true LIMIT 1`,
+      ),
     );
     if (!cats[0]) {
-      return reply.code(400).send({ error: { code: 'INVALID_CATEGORY', message: 'Unknown category.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_CATEGORY', message: 'Unknown category.' } });
     }
 
     const contentHash = canonicalHash(content);
@@ -519,12 +596,14 @@ export async function buildApp(): Promise<FastifyInstance> {
         JOIN content_objects co ON co.id = c.content_object_id
         WHERE c.author_user_id = ${userId}::uuid
           AND co.content_hash = ${contentHash}
-          AND c.created_at > now() - interval '10 minutes'
+          AND c.created_at > now() - interval '24 hours'
         LIMIT 1
       `),
     );
     if (dup.length > 0) {
-      return reply.code(409).send({ error: { code: 'CONTENT_DUPLICATE', message: 'Duplicate confession.' } });
+      return reply
+        .code(409)
+        .send({ error: { code: 'CONTENT_DUPLICATE', message: 'Duplicate confession.' } });
     }
 
     const recent = rowsOf<{ n: string }>(
@@ -543,7 +622,11 @@ export async function buildApp(): Promise<FastifyInstance> {
           AND r.created_at > now() - interval '24 hours'
       `),
     );
-    const verdict = scoreAbuse({ recentCount: Number(recent[0]?.n ?? 0), isDuplicate: false, openReports: Number(openRep[0]?.n ?? 0) });
+    const verdict = scoreAbuse({
+      recentCount: Number(recent[0]?.n ?? 0),
+      isDuplicate: false,
+      openReports: Number(openRep[0]?.n ?? 0),
+    });
 
     // T1H-005: eskalasi PoW saat abuse ambang (tanpa provider eksternal).
     if (verdict.flag) {
@@ -551,7 +634,11 @@ export async function buildApp(): Promise<FastifyInstance> {
       const sol = req.headers['x-pow-solution'];
       if (typeof sol !== 'string' || !verifyPowSolution(sol)) {
         return reply.code(429).send({
-          error: { code: 'POW_REQUIRED', message: 'Solve proof-of-work and retry.', challenge: issuePowChallenge() },
+          error: {
+            code: 'POW_REQUIRED',
+            message: 'Solve proof-of-work and retry.',
+            challenge: issuePowChallenge(),
+          },
         });
       }
     }
@@ -604,7 +691,12 @@ export async function buildApp(): Promise<FastifyInstance> {
       void created;
       return {
         statusCode: 201,
-        body: { id: publicId, status: 'visible', publicId, author: { displayName: displayName(seed) } },
+        body: {
+          id: publicId,
+          status: 'visible',
+          publicId,
+          author: { displayName: displayName(seed) },
+        },
       };
     };
 
@@ -628,7 +720,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     const parsed = reactBody.safeParse(req.body);
     if (!parsed.success || !isReaction(parsed.data.type)) {
-      return reply.code(400).send({ error: { code: 'INVALID_REACTION', message: 'Invalid reaction type.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_REACTION', message: 'Invalid reaction type.' } });
     }
     const db = getDb();
     const found = await findConfession(db, publicId);
@@ -646,7 +740,11 @@ export async function buildApp(): Promise<FastifyInstance> {
           reactionType: parsed.data.type as 'UNDERSTAND' | 'LOVE' | 'SAD' | 'WILD' | 'FUNNY',
         })
         .onConflictDoNothing({
-          target: [schema.reactions.confessionId, schema.reactions.userId, schema.reactions.reactionType],
+          target: [
+            schema.reactions.confessionId,
+            schema.reactions.userId,
+            schema.reactions.reactionType,
+          ],
         })
         .returning({ id: schema.reactions.id });
       return { statusCode: 200, body: { ok: true, reacted: ins.length > 0 } };
@@ -668,11 +766,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
     }
     if (!isReaction(type)) {
-      return reply.code(400).send({ error: { code: 'INVALID_REACTION', message: 'Invalid reaction type.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_REACTION', message: 'Invalid reaction type.' } });
     }
     const db = getDb();
     const found = await findConfession(db, publicId);
-    if (!found) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
+    if (!found)
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
     await db
       .delete(schema.reactions)
       .where(
@@ -692,7 +793,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
     }
     const parsed = z
-      .object({ limit: z.coerce.number().int().min(1).max(50).default(20), cursor: z.string().min(1).max(512).optional() })
+      .object({
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+        cursor: z.string().min(1).max(512).optional(),
+      })
       .safeParse(req.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: { code: 'INVALID_QUERY', message: 'Invalid query.' } });
@@ -706,12 +810,20 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (parsed.data.cursor) {
       cur = decodeCursor(parsed.data.cursor);
       if (!cur) {
-        return reply.code(400).send({ error: { code: 'INVALID_CURSOR', message: 'Invalid cursor.' } });
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_CURSOR', message: 'Invalid cursor.' } });
       }
     }
     const conds = [sql`w.confession_id = ${found.id}::uuid`, sql`w.status = 'VISIBLE'`];
-    if (cur) conds.push(sql`(w.created_at, w.public_id) > (${cur.createdAt}::timestamptz, ${cur.id})`);
-    const rows = rowsOf<{ public_id: string; body_text: string; display_seed: number; created_at: Date }>(
+    if (cur)
+      conds.push(sql`(w.created_at, w.public_id) > (${cur.createdAt}::timestamptz, ${cur.id})`);
+    const rows = rowsOf<{
+      public_id: string;
+      body_text: string;
+      display_seed: number;
+      created_at: Date;
+    }>(
       await db.execute(sql`
         SELECT w.public_id, w.body_text, w.display_seed, w.created_at FROM whispers w
         WHERE ${sql.join(conds, sql` AND `)}
@@ -744,11 +856,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     const parsed = whisperBody.safeParse(req.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'INVALID_CONTENT', message: 'Invalid payload.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_CONTENT', message: 'Invalid payload.' } });
     }
     const v = checkContent(parsed.data.content, WHISPER_MAX);
     if (!v.ok) {
-      return reply.code(400).send({ error: { code: 'INVALID_CONTENT', message: v.errors.join(',') } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_CONTENT', message: v.errors.join(',') } });
     }
     const db = getDb();
     const userId = req.user!.id;
@@ -765,12 +881,14 @@ export async function buildApp(): Promise<FastifyInstance> {
         JOIN content_objects co ON co.id = w.content_object_id
         WHERE w.author_user_id = ${userId}::uuid AND w.confession_id = ${found.id}::uuid
           AND co.content_hash = ${contentHash}
-          AND w.created_at > now() - interval '10 minutes'
+          AND w.created_at > now() - interval '24 hours'
         LIMIT 1
       `),
     );
     if (dup.length > 0) {
-      return reply.code(409).send({ error: { code: 'CONTENT_DUPLICATE', message: 'Duplicate whisper.' } });
+      return reply
+        .code(409)
+        .send({ error: { code: 'CONTENT_DUPLICATE', message: 'Duplicate whisper.' } });
     }
 
     const create = async () => {
@@ -817,7 +935,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   // --- Reports (T1-014): pelapor boleh anonim. T1-024/027: details max 500 via shared, throttle per-target. ---
   const reportBody = z.object({
     targetType: z.enum(['CONFESSION', 'WHISPER']),
-    targetId: z.string().regex(/^(c|w)_[A-Za-z0-9_-]+$/).min(3).max(64),
+    targetId: z
+      .string()
+      .regex(/^(c|w)_[A-Za-z0-9_-]+$/)
+      .min(3)
+      .max(64),
     reason: z.string().min(1).max(32),
     details: z.string().max(500).optional(),
   });
@@ -825,17 +947,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.post('/api/reports', async (req, reply) => {
     const parsed = reportBody.safeParse(req.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'INVALID_REPORT', message: 'Invalid report.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_REPORT', message: 'Invalid report.' } });
     }
     const { targetType, targetId, reason, details } = parsed.data;
     if (!isReason(reason)) {
-      return reply.code(400).send({ error: { code: 'INVALID_REPORT', message: 'Unknown reason.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_REPORT', message: 'Unknown reason.' } });
     }
     if (details !== undefined) {
       const { validateReportDetails } = await import('./validate.js');
       const vd = validateReportDetails(details);
       if (!vd.ok) {
-        return reply.code(400).send({ error: { code: 'INVALID_REPORT', message: vd.errors.join(',') } });
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_REPORT', message: vd.errors.join(',') } });
       }
     }
     const db = getDb();
@@ -845,8 +973,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     const target = rowsOf<{ id: string; status: string }>(
       targetType === 'CONFESSION'
-        ? await db.execute(sql`SELECT id, status FROM confessions WHERE public_id = ${targetId} LIMIT 1`)
-        : await db.execute(sql`SELECT id, status FROM whispers WHERE public_id = ${targetId} LIMIT 1`),
+        ? await db.execute(
+            sql`SELECT id, status FROM confessions WHERE public_id = ${targetId} LIMIT 1`,
+          )
+        : await db.execute(
+            sql`SELECT id, status FROM whispers WHERE public_id = ${targetId} LIMIT 1`,
+          ),
     )[0];
     if (!target) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Target not found.' } });
@@ -867,7 +999,9 @@ export async function buildApp(): Promise<FastifyInstance> {
         `),
     );
     if (recentDup.length > 0) {
-      return reply.code(429).send({ error: { code: 'RATE_LIMITED', message: 'Already reported recently.' } });
+      return reply
+        .code(429)
+        .send({ error: { code: 'RATE_LIMITED', message: 'Already reported recently.' } });
     }
 
     const ins = rowsOf<{ id: string }>(
@@ -887,7 +1021,9 @@ export async function buildApp(): Promise<FastifyInstance> {
           WHERE id = ${target.id}::uuid AND status = 'VISIBLE'
         `);
       } else {
-        await db.execute(sql`UPDATE whispers SET status = 'QUARANTINED' WHERE id = ${target.id}::uuid AND status = 'VISIBLE'`);
+        await db.execute(
+          sql`UPDATE whispers SET status = 'QUARANTINED' WHERE id = ${target.id}::uuid AND status = 'VISIBLE'`,
+        );
       }
       feedCacheInvalidate(); // T1-030 (async T1H-002: Redis bila ada)
     }
@@ -927,10 +1063,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       const t =
         r.target_type === 'CONFESSION'
           ? rowsOf<{ public_id: string; body_text: string; status: string }>(
-              await db.execute(sql`SELECT public_id, body_text, status FROM confessions WHERE id = ${r.target_id}::uuid LIMIT 1`),
+              await db.execute(
+                sql`SELECT public_id, body_text, status FROM confessions WHERE id = ${r.target_id}::uuid LIMIT 1`,
+              ),
             )[0]
           : rowsOf<{ public_id: string; body_text: string; status: string }>(
-              await db.execute(sql`SELECT public_id, body_text, status FROM whispers WHERE id = ${r.target_id}::uuid LIMIT 1`),
+              await db.execute(
+                sql`SELECT public_id, body_text, status FROM whispers WHERE id = ${r.target_id}::uuid LIMIT 1`,
+              ),
             )[0];
       items.push({
         reportId: r.id,
@@ -948,7 +1088,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const modActionBody = z.object({
     targetType: z.enum(['CONFESSION', 'WHISPER']),
-    targetId: z.string().regex(/^(c|w)_[A-Za-z0-9_-]+$/).min(3).max(64),
+    targetId: z
+      .string()
+      .regex(/^(c|w)_[A-Za-z0-9_-]+$/)
+      .min(3)
+      .max(64),
     action: z.enum(['DISMISS', 'HIDE', 'REMOVE', 'RESTRICT', 'BAN', 'RESTORE']),
     reason_code: z.string().min(1).max(32),
     notes: z.string().max(2000).optional(),
@@ -959,20 +1103,30 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!requireRole(req, reply, 'MODERATOR', 'ADMIN')) return;
     const parsed = modActionBody.safeParse(req.body);
     if (!parsed.success || !isReason(parsed.data.reason_code)) {
-      return reply.code(400).send({ error: { code: 'INVALID_ACTION', message: 'Invalid moderation action.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_ACTION', message: 'Invalid moderation action.' } });
     }
     const { targetType, targetId, action, reason_code, notes, policy_version } = parsed.data;
     const db = getDb();
     const target =
       targetType === 'CONFESSION'
         ? await db
-            .select({ id: schema.confessions.id, status: schema.confessions.status, authorUserId: schema.confessions.authorUserId })
+            .select({
+              id: schema.confessions.id,
+              status: schema.confessions.status,
+              authorUserId: schema.confessions.authorUserId,
+            })
             .from(schema.confessions)
             .where(eq(schema.confessions.publicId, targetId))
             .limit(1)
             .then((r) => r[0])
         : await db
-            .select({ id: schema.whispers.id, status: schema.whispers.status, authorUserId: schema.whispers.authorUserId })
+            .select({
+              id: schema.whispers.id,
+              status: schema.whispers.status,
+              authorUserId: schema.whispers.authorUserId,
+            })
             .from(schema.whispers)
             .where(eq(schema.whispers.publicId, targetId))
             .limit(1)
@@ -1002,7 +1156,10 @@ export async function buildApp(): Promise<FastifyInstance> {
             .set({ status: action === 'HIDE' ? 'HIDDEN' : 'REMOVED' })
             .where(eq(schema.whispers.id, target.id));
         } else if (action === 'RESTORE') {
-          await tx.update(schema.whispers).set({ status: 'VISIBLE' }).where(eq(schema.whispers.id, target.id));
+          await tx
+            .update(schema.whispers)
+            .set({ status: 'VISIBLE' })
+            .where(eq(schema.whispers.id, target.id));
         }
       }
       if (action === 'RESTRICT' || action === 'BAN') {
@@ -1041,17 +1198,26 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'admin'))) return;
     const secret = process.env.ADMIN_SECRET ?? '';
     if (!secret) {
-      return reply.code(503).send({ error: { code: 'ADMIN_DISABLED', message: 'Admin bootstrap disabled.' } });
+      return reply
+        .code(503)
+        .send({ error: { code: 'ADMIN_DISABLED', message: 'Admin bootstrap disabled.' } });
     }
     const got = req.headers['x-admin-secret'];
     if (got !== secret) {
-      return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Invalid admin secret.' } });
+      return reply
+        .code(403)
+        .send({ error: { code: 'FORBIDDEN', message: 'Invalid admin secret.' } });
     }
     const parsed = z
-      .object({ wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/), role: z.enum(['MODERATOR', 'ADMIN']) })
+      .object({
+        wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+        role: z.enum(['MODERATOR', 'ADMIN']),
+      })
       .safeParse(req.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: { code: 'INVALID_ROLE', message: 'Invalid wallet/role.' } });
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_ROLE', message: 'Invalid wallet/role.' } });
     }
     const db = getDb();
     const updated = rowsOf<{ id: string }>(
@@ -1061,7 +1227,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       `),
     );
     if (updated.length === 0) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'User not found. Login once first.' } });
+      return reply
+        .code(404)
+        .send({ error: { code: 'NOT_FOUND', message: 'User not found. Login once first.' } });
     }
     req.log.info({ op: 'grant-role', role: parsed.data.role });
     return { ok: true };
