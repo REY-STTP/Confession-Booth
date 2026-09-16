@@ -2,10 +2,16 @@
 // Pakai: `npm run db:backup` (butuh DATABASE_URL + pg_dump di PATH).
 // Restore drill: `npm run db:restore -- backups/booth-YYYY-MM-DD.dump`
 import { execFile } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+const rootEnv = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '.env');
+if (existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 
 const url = process.env.DATABASE_URL ?? '';
 if (!url) {

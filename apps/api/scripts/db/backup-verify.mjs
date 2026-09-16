@@ -3,12 +3,17 @@
 // Butuh pg_dump/pg_restore di PATH atau PGBIN (mis. E:\PostgreSQL\18\bin).
 // Pakai: `npm run db:backup:verify` (butuh DATABASE_URL).
 import { execFile } from 'node:child_process';
-import { mkdtempSync, statSync, rmSync } from 'node:fs';
+import { mkdtempSync, statSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+const rootEnv = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '.env');
+if (existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 
 const PGBIN = process.env.PGBIN ?? '';
 const bin = (n) => (PGBIN ? join(PGBIN, n) : n);

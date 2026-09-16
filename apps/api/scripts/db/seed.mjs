@@ -1,8 +1,15 @@
 // Seed idempoten: node scripts/db/seed.mjs — 11 kategori (SCHEMA §6).
 import pg from 'pg';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+const rootEnv = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '.env');
+if (existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 
 const CATEGORIES = [
   ['love', 'Love', 1],

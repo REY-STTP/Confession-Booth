@@ -2,12 +2,16 @@
 // - up: terapkan migrasi pending berurutan, catat di __migrations.
 // - down: rollback SATU migrasi terakhir (dev/staging saja).
 import pg from 'pg';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 dotenv.config();
+const rootEnv = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '.env');
+if (existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'db', 'migrations');
 const mode = process.argv[2] ?? 'up';

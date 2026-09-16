@@ -1,8 +1,13 @@
-// Konfigurasi server — dotenv dimuat sekali di sini; diimpor pertama oleh server.ts.
-// Server-only: tidak ada nilai dari sini yang boleh di-render ke publik.
 import dotenv from 'dotenv';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 dotenv.config();
+const rootEnv = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '.env');
+if (existsSync(rootEnv)) {
+  dotenv.config({ path: rootEnv });
+}
 
 function required(name: string): string {
   const v = process.env[name];
