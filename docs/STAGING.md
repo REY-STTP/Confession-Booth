@@ -107,7 +107,7 @@ staging boleh `db:rollback` + `db:setup` ulang. Lihat `docs/OPERATIONS.md §5`.
 - [x] Repo git + commit awal + CI (lint/typecheck/test/e2e/audit/build)
 - [x] Dockerfile non-root + healthcheck + compose env penuh
 - [x] Runbook ini + OPERATIONS + SECURITY_REVIEW_1H
-- [ ] Remote + push [kamu]
-- [ ] DB + API + web staging [kamu]
-- [ ] Sepolia deploy + verify [kamu, funded key]
+- [x] Remote + push [kamu]
+- [x] DB + API + web staging [kamu]
+- [x] Sepolia deploy + verify [kamu, funded key]
 - [ ] ZAP + Lighthouse [kamu]

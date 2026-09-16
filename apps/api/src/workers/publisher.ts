@@ -42,6 +42,7 @@ interface PendingRow {
   content_hash: string;
   transaction_hash: string | null;
   attempts: number;
+  contract_address?: string | null;
 }
 
 function rowsOf<T>(res: unknown): T[] {
@@ -80,7 +81,7 @@ export async function publisherTick(
       : sql``;
   const pending = rowsOf<PendingRow>(
     await db.execute(sql`
-      SELECT p.id, p.onchain_confession_id, p.content_hash, p.transaction_hash, p.attempts
+      SELECT p.id, p.onchain_confession_id, p.content_hash, p.transaction_hash, p.attempts, p.contract_address
       FROM publications p
       WHERE p.status IN ('PENDING_CHAIN', 'FAILED')
         AND (p.submitted_at IS NULL OR p.submitted_at < now() - interval '5 minutes')
@@ -108,6 +109,22 @@ export async function publisherTick(
     try {
       let hash = p.transaction_hash as Hex | null;
       if (!hash) {
+        const contractAddress = (
+          E.contractAddress && E.contractAddress !== '0x0000000000000000000000000000000000000000'
+            ? E.contractAddress
+            : p.contract_address &&
+                p.contract_address !== '0x0000000000000000000000000000000000000000'
+              ? p.contract_address
+              : null
+        ) as Hex | null;
+
+        if (!contractAddress) {
+          console.warn(
+            '[publisher] contractAddress belum di-set valid — lewati (tetap PENDING_CHAIN).',
+          );
+          continue;
+        }
+
         const nonce = E.useNonceManager ? await getNextNonce() : undefined;
         const gasPriceConfig =
           E.maxFeePerGas || E.maxPriorityFeePerGas
@@ -118,7 +135,7 @@ export async function publisherTick(
             : undefined;
 
         hash = await wallet.writeContract({
-          address: E.contractAddress,
+          address: contractAddress,
           abi: REGISTRY_ABI,
           functionName: 'publish',
           args: [toBytes32(p.onchain_confession_id), toBytes32(p.content_hash), '', 1],
