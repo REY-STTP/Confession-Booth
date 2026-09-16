@@ -2,8 +2,14 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CATEGORIES, getFeedWithCursor, getLastFeedError, type FeedItem } from '@/lib/booth';
+import Link from 'next/link';
+import { Search, AlertTriangle, Loader2, PenLine, X } from 'lucide-react';
+import { getFeedWithCursor, getLastFeedError, type FeedItem } from '@/lib/booth';
 import { BoothCard, Empty, SkeletonList } from '@/app/components/booth-card';
+import { FeedTabs } from '@/components/feed-tabs';
+import { CategoryPills } from '@/components/category-pills';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
   const params = useSearchParams();
@@ -57,80 +63,135 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
     }
   }
 
+  const hasFilter = Boolean(category || q);
+
   return (
     <div className="space-y-6">
-      <nav className="flex gap-2 text-sm" aria-label="Urutkan">
-        {(['new', 'trending', 'relatable'] as const).map((s) => (
-          <a
-            key={s}
-            aria-current={sort === s ? 'page' : undefined}
-            href={s === 'new' ? '/feed' : `/${s}`}
-            className={`rounded-full border px-3 py-1.5 ${sort === s ? 'border-booth-accent text-booth-ink' : 'border-booth-line text-booth-dim'}`}
-          >
-            {s === 'new' ? 'New' : s === 'trending' ? 'Trending' : 'Most Relatable'}
-          </a>
-        ))}
-      </nav>
+      {/* Segmented feed tabs */}
+      <FeedTabs />
 
-      <form action="/feed" method="get" className="flex gap-2" role="search">
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Cari confession…"
-          className="flex-1 rounded-lg border border-booth-line bg-booth-panel p-2.5 text-sm"
-          maxLength={200}
-        />
+      {/* Search Bar */}
+      <form action="/feed" method="get" className="flex items-center gap-2" role="search">
+        <div className="relative flex-1">
+          <Search
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+            aria-hidden="true"
+          />
+          <Input
+            name="q"
+            defaultValue={q}
+            placeholder="Cari pengakuan atau kata kunci..."
+            className="pl-9 h-10 bg-card/60 border-border/80 text-sm focus-visible:ring-primary rounded-xl"
+            maxLength={200}
+          />
+        </div>
         {category ? <input type="hidden" name="category" value={category} /> : null}
-        <button className="rounded-lg border border-booth-line px-4 text-sm hover:border-booth-accent">
+        <Button
+          type="submit"
+          variant="secondary"
+          size="default"
+          className="rounded-xl px-4 font-medium h-10"
+        >
           Cari
-        </button>
+        </Button>
       </form>
 
-      <div className="flex flex-wrap gap-2 text-xs" aria-label="Kategori">
-        <a
-          href="/feed"
-          className={`rounded-full border px-2.5 py-1 ${!category ? 'border-booth-accent' : 'border-booth-line text-booth-dim'}`}
-        >
-          semua
-        </a>
-        {CATEGORIES.map((c) => (
-          <a
-            key={c}
-            href={`/feed?category=${c}`}
-            className={`rounded-full border px-2.5 py-1 ${category === c ? 'border-booth-accent' : 'border-booth-line text-booth-dim'}`}
-          >
-            {c}
-          </a>
-        ))}
-      </div>
+      {/* Horizontal Category Pills */}
+      <CategoryPills activeCategory={category} searchQuery={q} />
 
+      {/* Active Filter Indicator */}
+      {hasFilter ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/20 px-3.5 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span>Filter aktif:</span>
+            {category ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-primary font-medium">
+                #{category}
+              </span>
+            ) : null}
+            {q ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-foreground font-mono">
+                &ldquo;{q}&rdquo;
+              </span>
+            ) : null}
+          </div>
+          <Link
+            href="/feed"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Reset</span>
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Offline Alert */}
+      {offline ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs sm:text-sm text-amber-200"
+        >
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
+          <p>
+            API tidak terjangkau — menampilkan data cadangan lokal. Cek koneksi internet atau status
+            server.
+          </p>
+        </div>
+      ) : null}
+
+      {/* Feed List or States */}
       {!items ? (
-        <SkeletonList />
+        <SkeletonList count={4} />
       ) : items.length === 0 ? (
-        <Empty title="The booth is quiet." sub="Be the first to leave something behind." />
+        <Empty
+          title={hasFilter ? 'Tidak ada pengakuan yang cocok' : 'The booth is quiet.'}
+          sub={
+            hasFilter
+              ? 'Coba ganti kata kunci pencarian atau hapus filter kategori.'
+              : 'Jadilah jiwa pertama yang meninggalkan jejak di ruang pengakuan ini.'
+          }
+          action={
+            hasFilter ? (
+              <Link href="/feed">
+                <Button variant="outline" size="sm" className="rounded-full">
+                  Lihat Semua Pengakuan
+                </Button>
+              </Link>
+            ) : (
+              <Link href="/compose">
+                <Button size="sm" className="rounded-full gap-1.5">
+                  <PenLine className="h-3.5 w-3.5" />
+                  <span>Tulis Pengakuan</span>
+                </Button>
+              </Link>
+            )
+          }
+        />
       ) : (
         <div className="grid gap-4">
-          {offline ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-yellow-800 bg-yellow-950 p-3 text-sm text-yellow-200"
-            >
-              API tidak terjangkau — menampilkan data cadangan. Cek koneksi/NEXT_PUBLIC_API_URL.
-            </p>
-          ) : null}
           {items.map((i) => (
             <BoothCard key={i.id} item={i} />
           ))}
 
+          {/* Load More Button */}
           {nextCursor ? (
-            <div className="pt-2 text-center">
-              <button
+            <div className="pt-3 text-center">
+              <Button
                 onClick={handleLoadMore}
                 disabled={loadingMore}
-                className="rounded-full border border-booth-line bg-booth-panel px-6 py-2.5 text-sm text-booth-ink hover:border-booth-accent hover:bg-booth-accent/10 transition-colors disabled:opacity-50"
+                variant="outline"
+                size="lg"
+                className="rounded-full px-8 border-border/80 bg-card/60 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all duration-200"
               >
-                {loadingMore ? 'Memuat confession…' : 'Muat Lebih Banyak'}
-              </button>
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" aria-hidden="true" />
+                    <span>Memuat confession...</span>
+                  </>
+                ) : (
+                  <span>Muat Lebih Banyak</span>
+                )}
+              </Button>
             </div>
           ) : null}
         </div>
@@ -141,7 +202,7 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
 
 export default function FeedPage() {
   return (
-    <Suspense fallback={<SkeletonList />}>
+    <Suspense fallback={<SkeletonList count={4} />}>
       <FeedInner sort="new" />
     </Suspense>
   );
