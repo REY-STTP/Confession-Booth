@@ -1,9 +1,12 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
+import { ShieldAlert, CheckCircle, EyeOff, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { SkeletonList } from '@/app/components/booth-card';
-import { API_URL } from '@/lib/booth';
 import { useSession, apiFetch } from '@/lib/session';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface QueueItem {
   reportId: string;
@@ -31,14 +34,18 @@ function ModInner() {
     }
     setError('');
     try {
-      const res = await apiFetch(`/api/moderation/queue?status=${encodeURIComponent(status)}&limit=20`, accessToken);
-      if (res.status === 401) throw new Error('Sesi habis — masuk lagi.');
-      if (res.status === 403) throw new Error('Butuh role MODERATOR/ADMIN.');
-      if (!res.ok) throw new Error(`queue failed: ${res.status}`);
+      const res = await apiFetch(
+        `/api/moderation/queue?status=${encodeURIComponent(status)}&limit=20`,
+        accessToken,
+      );
+      if (res.status === 401) throw new Error('Sesi kedaluwarsa — silakan masuk kembali.');
+      if (res.status === 403)
+        throw new Error('Akses ditolak: Memerlukan wewenang MODERATOR atau ADMIN.');
+      if (!res.ok) throw new Error(`Gagal memuat antrean: status ${res.status}`);
       const body = await res.json();
       setItems(body.items ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal muat antrean.');
+      setError(e instanceof Error ? e.message : 'Gagal memuat antrean moderasi.');
       setItems([]);
     }
   }, [accessToken, state, status]);
@@ -63,10 +70,10 @@ function ModInner() {
           policy_version: 'v1.0',
         }),
       });
-      if (!res.ok) throw new Error(`action failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Aksi gagal dijalankan (${res.status})`);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Aksi gagal.');
+      setError(e instanceof Error ? e.message : 'Aksi moderasi gagal.');
     } finally {
       setActing('');
     }
@@ -74,72 +81,164 @@ function ModInner() {
 
   if (state !== 'booth') {
     return (
-      <div className="booth-card p-5 text-sm">
-        <p className="font-semibold">Moderation queue</p>
-        <p className="mt-1 text-booth-dim">Masuk booth dulu dengan akun moderator. Identitas moderator tidak publik.</p>
+      <div className="rounded-2xl border border-border/80 bg-card/80 p-8 text-center space-y-3 max-w-lg mx-auto">
+        <ShieldAlert className="mx-auto h-8 w-8 text-amber-400" />
+        <h2 className="text-lg font-semibold text-foreground">Antrean Moderasi</h2>
+        <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+          Silakan masuk ke dalam booth dengan dompet yang memiliki hak akses MODERATOR. Identitas
+          moderator tidak pernah diungkapkan kepada publik.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Moderation queue</h1>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-lg border border-booth-line bg-booth-bg p-2 text-sm"
-          aria-label="Filter status"
-        >
-          {['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED'].map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      {error ? <p role="alert" className="text-sm text-red-400">{error}</p> : null}
-      {!items ? <SkeletonList /> : items.length === 0 ? (
-        <p className="text-sm text-booth-dim">Antrean kosong.</p>
-      ) : items.map((q) => (
-        <div key={q.reportId} className="booth-card space-y-2 p-4 text-sm">
-          <p className="font-semibold">{q.targetPublicId ?? '(target hilang)'} · {q.reason}</p>
-          <p className="text-booth-dim">{q.preview ?? '—'}</p>
-          <p className="text-xs text-booth-dim">Status target: {q.targetStatus ?? '?'} · {new Date(q.createdAt).toLocaleString()}</p>
-          <div className="flex gap-2">
-            <button
-              disabled={acting !== ''}
-              onClick={() => act(q.targetType, q.targetPublicId, 'DISMISS')}
-              aria-label={`Dismiss ${q.targetPublicId}`}
-              className="rounded-lg border border-booth-line px-3 py-1.5 disabled:opacity-50"
-            >
-              Dismiss
-            </button>
-            <button
-              disabled={acting !== ''}
-              onClick={() => act(q.targetType, q.targetPublicId, 'HIDE')}
-              aria-label={`Hide ${q.targetPublicId}`}
-              className="rounded-lg border border-booth-line px-3 py-1.5 disabled:opacity-50"
-            >
-              Hide
-            </button>
-            <button
-              disabled={acting !== ''}
-              onClick={() => act(q.targetType, q.targetPublicId, 'REMOVE')}
-              aria-label={`Remove ${q.targetPublicId}`}
-              className="rounded-lg border border-red-800 px-3 py-1.5 text-red-300 disabled:opacity-50"
-            >
-              {acting ? '…' : 'Remove'}
-            </button>
+    <div className="space-y-6 max-w-3xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-primary" />
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+              Antrean Moderasi (Moderation Queue)
+            </h1>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Tinjau laporan konten dari komunitas. Tindakan yang Anda ambil tercatat dalam audit log.
+          </p>
         </div>
-      ))}
-      <p className="text-xs text-booth-dim">Semua aksi tercatat: actor, reason, timestamp, target, policy version. Identitas moderator tidak publik.</p>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="mod-status" className="text-xs text-muted-foreground whitespace-nowrap">
+            Filter:
+          </label>
+          <select
+            id="mod-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="rounded-xl border border-border/80 bg-background/80 px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+            aria-label="Filter status antrean"
+          >
+            {['OPEN', 'REVIEWING', 'RESOLVED', 'DISMISSED'].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs text-destructive flex items-center gap-2"
+        >
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      {/* Queue Items */}
+      {!items ? (
+        <SkeletonList count={3} />
+      ) : items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border/70 bg-card/40 p-10 text-center text-xs sm:text-sm text-muted-foreground">
+          <CheckCircle className="mx-auto h-8 w-8 text-emerald-400 mb-2 opacity-80" />
+          <p className="font-medium text-foreground">Antrean Bersih</p>
+          <p className="mt-1">Tidak ada laporan dengan status {status} saat ini.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {items.map((q) => {
+            const isTargetActing = acting.includes(q.targetPublicId ?? '');
+
+            return (
+              <div
+                key={q.reportId}
+                className="rounded-xl border border-border/75 bg-card/80 p-5 space-y-3 shadow-sm transition-all"
+              >
+                <div className="flex items-start justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="font-mono text-[10px]">
+                      {q.targetType}
+                    </Badge>
+                    <span className="font-mono text-xs font-semibold text-foreground">
+                      {q.targetPublicId ?? '(target dihapus)'}
+                    </span>
+                    <Badge variant="destructive" className="text-[10px]">
+                      {q.reason}
+                    </Badge>
+                  </div>
+
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {new Date(q.createdAt).toLocaleString()}
+                  </span>
+                </div>
+
+                {/* Content Preview */}
+                <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs text-foreground/90 font-sans leading-relaxed break-words">
+                  {q.preview ? `"${q.preview}"` : '— (Pratinjau konten tidak tersedia)'}
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs flex-wrap gap-2">
+                  <span className="text-[11px] text-muted-foreground">
+                    Status Target:{' '}
+                    <strong className="font-mono text-foreground">{q.targetStatus ?? '?'}</strong>
+                  </span>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isTargetActing}
+                      onClick={() => act(q.targetType, q.targetPublicId, 'DISMISS')}
+                      className="rounded-full text-xs h-8 px-3"
+                    >
+                      Abaikan (Dismiss)
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isTargetActing}
+                      onClick={() => act(q.targetType, q.targetPublicId, 'HIDE')}
+                      className="rounded-full text-xs h-8 px-3 gap-1"
+                    >
+                      <EyeOff className="h-3 w-3" />
+                      <span>Sembunyikan</span>
+                    </Button>
+
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={isTargetActing}
+                      onClick={() => act(q.targetType, q.targetPublicId, 'REMOVE')}
+                      className="rounded-full text-xs h-8 px-3 gap-1"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>{isTargetActing ? 'Memproses...' : 'Hapus'}</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Audit reassurance footer */}
+      <div className="rounded-xl border border-border/60 bg-card/40 p-3.5 text-[11px] text-muted-foreground leading-relaxed">
+        🛡️ Seluruh keputusan moderasi tercatat dalam audit log permanen (aktor, alasan, stempel
+        waktu, dan versi kebijakan v1.0). Identitas moderator tidak pernah dipublikasikan keluar.
+      </div>
     </div>
   );
 }
 
 export default function ModPage() {
   return (
-    <Suspense fallback={<SkeletonList />}>
+    <Suspense fallback={<SkeletonList count={3} />}>
       <ModInner />
     </Suspense>
   );

@@ -1,14 +1,35 @@
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import { BrandMark } from '@/components/brand-mark';
+import { Button } from '@/components/ui/button';
 
 export default function NotFound() {
   return (
-    <div className="booth-card p-10 text-center" role="status">
-      <p className="text-4xl" aria-hidden="true">🕯️</p>
-      <h1 className="mt-4 text-xl font-bold">Ruangan ini kosong.</h1>
-      <p className="mt-2 text-sm text-booth-dim">Halaman tidak ditemukan atau konten telah dimoderasi.</p>
-      <Link href="/feed" className="mt-6 inline-block rounded-xl bg-booth-accent px-6 py-3 font-semibold text-black">
-        Kembali ke feed
-      </Link>
+    <div
+      className="flex min-h-[50vh] flex-col items-center justify-center rounded-3xl border border-dashed border-border/80 bg-card/40 p-8 sm:p-14 text-center backdrop-blur-xs shadow-xs"
+      role="status"
+    >
+      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary shadow-inner">
+        <BrandMark size="lg" />
+      </div>
+
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+        Ruangan Ini Sunyi & Kosong
+      </h1>
+
+      <p className="mt-2 text-xs sm:text-sm text-muted-foreground max-w-sm leading-relaxed">
+        Halaman yang Anda tuju tidak ditemukan, telah berpindah, atau pengakuan telah disembunyikan
+        oleh tim moderasi.
+      </p>
+
+      <div className="mt-6 flex items-center justify-center gap-3">
+        <Link href="/feed">
+          <Button className="rounded-full gap-2 font-medium px-6">
+            <ArrowLeft className="h-4 w-4" />
+            <span>Kembali ke Feed Utama</span>
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }
