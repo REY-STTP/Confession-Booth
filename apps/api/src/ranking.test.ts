@@ -11,10 +11,6 @@ import { feedCacheSet, feedCacheGet, feedCacheInvalidate } from './cache.js';
 await buildApp();
 const db = getDb();
 
-before(async () => {
-  await db.execute(sql`DELETE FROM feed_scores`);
-});
-
 describe('ranking formula (T1-030)', () => {
   it('trending: engagement muda menang atas tua sepi', () => {
     const young = trendingScore({ reactions: 10, whispers: 5, uniqueEngagement: 8, ageHours: 1 });

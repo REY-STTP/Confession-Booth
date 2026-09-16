@@ -106,12 +106,7 @@ async function onchainIdOf(publicId: string): Promise<string> {
 
 before(async () => {
   await app.ready();
-  // Bersihkan sisa run sebelumnya (hanya baris lebih tua dari run ini — aman paralel).
-  const t0 = new Date().toISOString();
-  await db.execute(sql`DELETE FROM reports WHERE created_at < ${t0}::timestamptz`);
-  await db.execute(sql`DELETE FROM moderation_actions WHERE created_at < ${t0}::timestamptz`);
-  await db.execute(sql`DELETE FROM confessions WHERE created_at < ${t0}::timestamptz`);
-  // Cursor lama menunjuk blok chain yang sudah mati (node lokal restart tiap run).
+  // Cursor chain lokal direset untuk node hardhat baru (name scoped untuk chain lokal 31337)
   await db.execute(sql`DELETE FROM indexer_state WHERE name = 'confession-events'`);
   node = spawn('npx', ['hardhat', 'node', '--port', '8545'], {
     cwd: CONTRACTS,

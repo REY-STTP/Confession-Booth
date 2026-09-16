@@ -196,13 +196,18 @@ export async function verifyAndLogin(
         .returning();
       u = ins[0];
     } else {
+      if (u.status === 'BANNED') {
+        const err = new Error('Akun ini telah diblokir.');
+        (err as unknown as { statusCode: number }).statusCode = 403;
+        throw err;
+      }
       // Update lastSeenAt and chainId; only set wallet_first_tx_at if null (first verified login)
+      // JANGAN reset status ke 'ACTIVE' agar status BANNED/RESTRICTED tidak hilang
       const upd = await tx
         .update(schema.users)
         .set({
           lastSeenAt: new Date(now),
           chainId: row.chainId,
-          status: 'ACTIVE',
           ...(envRole ? { role: envRole } : {}),
           ...(u.walletFirstTxAt === null ? { walletFirstTxAt: new Date(now) } : {}),
         })

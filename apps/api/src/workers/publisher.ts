@@ -83,8 +83,10 @@ export async function publisherTick(
     await db.execute(sql`
       SELECT p.id, p.onchain_confession_id, p.content_hash, p.transaction_hash, p.attempts, p.contract_address
       FROM publications p
-      WHERE p.status IN ('PENDING_CHAIN', 'FAILED')
-        AND (p.submitted_at IS NULL OR p.submitted_at < now() - interval '5 minutes')
+      WHERE (
+        (p.status IN ('PENDING_CHAIN', 'FAILED') AND (p.submitted_at IS NULL OR p.submitted_at < now() - interval '5 minutes'))
+        OR (p.status = 'SUBMITTED' AND p.submitted_at < now() - interval '10 minutes')
+      )
         ${scope}
       ORDER BY p.submitted_at NULLS FIRST LIMIT ${batch}
     `),

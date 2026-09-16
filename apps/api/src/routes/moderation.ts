@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
+import { config } from '../config.js';
 import { feedCacheInvalidate } from '../cache.js';
 import { snippet } from '../content.js';
 import { isReason } from '../validate.js';
@@ -307,18 +308,13 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: { code: 'INVALID_ROLE', message: 'Invalid wallet/role.' } });
     }
     const db = getDb();
-    const updated = rowsOf<{ id: string }>(
-      await db.execute(sql`
-        UPDATE users SET role = ${parsed.data.role} WHERE wallet_address = ${parsed.data.wallet.toLowerCase()}
-        RETURNING id
-      `),
-    );
-    if (updated.length === 0) {
-      return reply
-        .code(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'User not found. Login once first.' } });
-    }
-    req.log.info({ op: 'grant-role', role: parsed.data.role });
+    const chainId = config.chainId;
+    await db.execute(sql`
+      INSERT INTO users (wallet_address, chain_id, role, status, wallet_first_tx_at, last_seen_at)
+      VALUES (${parsed.data.wallet.toLowerCase()}, ${chainId}, ${parsed.data.role}, 'ACTIVE', now(), now())
+      ON CONFLICT (wallet_address) DO UPDATE SET role = EXCLUDED.role
+    `);
+    req.log.info({ op: 'grant-role', role: parsed.data.role, wallet: parsed.data.wallet });
     return { ok: true };
   });
 };
