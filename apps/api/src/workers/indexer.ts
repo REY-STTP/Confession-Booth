@@ -23,6 +23,8 @@ function rowsOf<T>(res: unknown): T[] {
 
 const CURSOR_NAME = 'confession-events';
 const LOOKBACK = 2000n;
+const MAX_LOOKBACK_LIMIT = 50000n; // limit RPC block range
+const MAX_BLOCK_CHUNK = 2000n; // batas maksimum blok yang ditanyakan per call RPC agar aman di semua provider
 const MISMATCH_ALERT_THRESHOLD = 5; // alert jika mismatch > 5 per tick
 
 export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<IndexerReport> {
@@ -39,27 +41,40 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
   const pub = publicClient(E);
   const latest = await pub.getBlockNumber();
 
+  const cursorName = E.chainId === 31337 ? CURSOR_NAME : `${CURSOR_NAME}-${E.chainId}`;
   const cur = rowsOf<{ last_block: string }>(
-    await db.execute(sql`SELECT last_block FROM indexer_state WHERE name = ${CURSOR_NAME} LIMIT 1`),
+    await db.execute(sql`SELECT last_block FROM indexer_state WHERE name = ${cursorName} LIMIT 1`),
   )[0];
   let from = cur ? BigInt(cur.last_block) + 1n : latest - LOOKBACK;
   if (from < 0n) from = 0n;
+
+  // Proteksi jika cursor terlalu jauh di masa lalu (misal akibat database shared dengan test / reset lokal)
+  if (latest - from > MAX_LOOKBACK_LIMIT) {
+    console.warn(
+      `[indexer] Cursor (${from}) tertinggal >50k blok dari latest (${latest}). Fast-forward ke ${latest - LOOKBACK}`,
+    );
+    from = latest - LOOKBACK;
+  }
+
   if (from > latest) from = latest + 1n; // belum ada blok baru
+
+  // Batasi blok per-tick dengan MAX_BLOCK_CHUNK
+  const targetTo = from + MAX_BLOCK_CHUNK < latest ? from + MAX_BLOCK_CHUNK : latest;
 
   const report: IndexerReport = {
     fromBlock: Number(from),
-    toBlock: Number(latest),
+    toBlock: Number(targetTo),
     events: 0,
     matched: 0,
     mismatched: 0,
   };
   let mismatchCount = 0;
-  if (from <= latest) {
+  if (from <= targetTo) {
     const logs = await pub.getLogs({
       address: E.contractAddress,
       event: PUBLISHED_EVENT,
       fromBlock: from,
-      toBlock: latest,
+      toBlock: targetTo,
     });
     report.events = logs.length;
     for (const log of logs) {
@@ -98,7 +113,7 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
       report.matched += 1;
       // T1H-002: Per-event cursor update untuk safety - update cursor per event
       await db.execute(sql`
-        INSERT INTO indexer_state (name, last_block) VALUES (${CURSOR_NAME}, ${Number(log.blockNumber)})
+        INSERT INTO indexer_state (name, last_block) VALUES (${cursorName}, ${Number(log.blockNumber)})
         ON CONFLICT (name) DO UPDATE SET last_block = EXCLUDED.last_block, updated_at = now()
       `);
     }
@@ -109,10 +124,10 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
     }
   }
 
-  // Final cursor update hanya jika tidak ada event baru (fallback untuk memastikan cursor maju)
-  if (report.events === 0 && from <= latest) {
+  // Final cursor update memastikan cursor maju melewati blok-blok tanpa event
+  if (from <= targetTo) {
     await db.execute(sql`
-      INSERT INTO indexer_state (name, last_block) VALUES (${CURSOR_NAME}, ${Number(latest)})
+      INSERT INTO indexer_state (name, last_block) VALUES (${cursorName}, ${Number(targetTo)})
       ON CONFLICT (name) DO UPDATE SET last_block = EXCLUDED.last_block, updated_at = now()
     `);
   }
