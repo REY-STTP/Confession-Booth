@@ -65,3 +65,6 @@ Desktop.ini
 .vscode/
 *.sublime-workspace
 skills-lock.json
+
+# docs
+docs/

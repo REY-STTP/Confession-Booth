@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: {
     template: '%s | Confession Booth',
-    default: 'Confession Booth (UNSAID) — Say what you can’t say',
+    default: 'Confession Booth — Say what you can’t say',
   },
   description:
     'Anonymous decentralized confession sanctuary. Your confession is public. Your profile doesn’t have to be.',

@@ -62,9 +62,6 @@ export function HeaderNav() {
             <span className="text-base font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
               Confession Booth
             </span>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-mono -mt-0.5">
-              UNSAID
-            </span>
           </div>
         </Link>
 
