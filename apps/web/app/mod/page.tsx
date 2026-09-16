@@ -1,7 +1,15 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { ShieldAlert, CheckCircle, EyeOff, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  ShieldAlert,
+  CheckCircle,
+  EyeOff,
+  Trash2,
+  AlertTriangle,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react';
 import { SkeletonList } from '@/app/components/booth-card';
 import { useSession, apiFetch } from '@/lib/session';
 import { Button } from '@/components/ui/button';
@@ -228,9 +236,12 @@ function ModInner() {
       )}
 
       {/* Audit reassurance footer */}
-      <div className="rounded-xl border border-border/60 bg-card/40 p-3.5 text-[11px] text-muted-foreground leading-relaxed">
-        🛡️ Seluruh keputusan moderasi tercatat dalam audit log permanen (aktor, alasan, stempel
-        waktu, dan versi kebijakan v1.0). Identitas moderator tidak pernah dipublikasikan keluar.
+      <div className="rounded-xl border border-border/60 bg-card/40 p-3.5 text-[11px] text-muted-foreground leading-relaxed flex items-start gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+        <span>
+          Seluruh keputusan moderasi tercatat dalam audit log permanen (aktor, alasan, stempel
+          waktu, dan versi kebijakan v1.0). Identitas moderator tidak pernah dipublikasikan keluar.
+        </span>
       </div>
     </div>
   );

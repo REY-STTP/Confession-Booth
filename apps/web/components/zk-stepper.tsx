@@ -172,8 +172,11 @@ export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
           <span className="truncate">{currentStatus || 'Menyiapkan sirkuit bukti...'}</span>
         </div>
 
-        <p className="text-[11px] text-center text-muted-foreground">
-          🛡️ Sinyal dikirim tanpa otorisasi wallet. Identitas Anda tidak pernah bocor ke server.
+        <p className="text-[11px] text-center text-muted-foreground flex items-center justify-center gap-1.5">
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+          <span>
+            Sinyal dikirim tanpa otorisasi wallet. Identitas Anda tidak pernah bocor ke server.
+          </span>
         </p>
       </DialogContent>
     </Dialog>

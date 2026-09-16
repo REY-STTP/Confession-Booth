@@ -1,6 +1,21 @@
 'use client';
 
+import * as React from 'react';
 import Link from 'next/link';
+import {
+  Heart,
+  HeartCrack,
+  Lock,
+  Sprout,
+  GraduationCap,
+  Briefcase,
+  Home,
+  Smile,
+  CloudRain,
+  Waves,
+  Moon,
+  Sparkles,
+} from 'lucide-react';
 import { CATEGORIES } from '@/lib/booth';
 import { cn } from '@/lib/utils';
 
@@ -11,18 +26,18 @@ interface CategoryPillsProps {
   className?: string;
 }
 
-const CATEGORY_ICONS: Record<string, string> = {
-  love: '💌',
-  heartbreak: '💔',
-  secret: '🤫',
-  life: '🌱',
-  school: '📚',
-  work: '💼',
-  family: '🏠',
-  funny: '😂',
-  sad: '🌧️',
-  deep: '🌊',
-  midnight: '🌒',
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  love: Heart,
+  heartbreak: HeartCrack,
+  secret: Lock,
+  life: Sprout,
+  school: GraduationCap,
+  work: Briefcase,
+  family: Home,
+  funny: Smile,
+  sad: CloudRain,
+  deep: Waves,
+  midnight: Moon,
 };
 
 export function CategoryPills({
@@ -58,12 +73,13 @@ export function CategoryPills({
             : 'bg-card/50 text-muted-foreground border-border/80 hover:bg-muted/60 hover:text-foreground hover:border-border',
         )}
       >
+        <Sparkles className="h-3 w-3" aria-hidden="true" />
         <span>Semua</span>
       </Link>
 
       {CATEGORIES.map((c) => {
         const isActive = activeCategory.toLowerCase() === c.toLowerCase();
-        const icon = CATEGORY_ICONS[c];
+        const Icon = CATEGORY_ICONS[c];
 
         return (
           <Link
@@ -77,7 +93,7 @@ export function CategoryPills({
                 : 'bg-card/50 text-muted-foreground border-border/80 hover:bg-muted/60 hover:text-foreground hover:border-border',
             )}
           >
-            {icon ? <span aria-hidden="true">{icon}</span> : null}
+            {Icon ? <Icon className="h-3 w-3" aria-hidden="true" /> : null}
             <span>{c}</span>
           </Link>
         );

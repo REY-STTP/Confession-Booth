@@ -11,6 +11,16 @@ import {
   Check,
   ArrowRight,
   HelpCircle,
+  CloudRain,
+  HeartCrack,
+  Waves,
+  Heart,
+  Sprout,
+  Briefcase,
+  GraduationCap,
+  Home,
+  Smile,
+  Moon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -31,6 +41,7 @@ import {
   getCurrentEpoch,
 } from '@/lib/zk';
 import { ZkStepper } from '@/components/zk-stepper';
+import { BadgeIcon } from '@/components/icon-helpers';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,17 +49,17 @@ import { cn } from '@/lib/utils';
 import { ReportDialog } from '@/components/report-dialog';
 
 const EMOTION_CATEGORIES = [
-  { value: 'sad', label: 'Sad', icon: '🌧️' },
-  { value: 'heartbreak', label: 'Heartbreak', icon: '💔' },
-  { value: 'secret', label: 'Secret', icon: '🤫' },
-  { value: 'deep', label: 'Deep', icon: '🌊' },
-  { value: 'love', label: 'Love', icon: '💌' },
-  { value: 'life', label: 'Life', icon: '🌱' },
-  { value: 'work', label: 'Work', icon: '💼' },
-  { value: 'school', label: 'School', icon: '📚' },
-  { value: 'family', label: 'Family', icon: '🏠' },
-  { value: 'funny', label: 'Funny', icon: '😂' },
-  { value: 'midnight', label: 'Midnight', icon: '🌒' },
+  { value: 'sad', label: 'Sad', icon: CloudRain },
+  { value: 'heartbreak', label: 'Heartbreak', icon: HeartCrack },
+  { value: 'secret', label: 'Secret', icon: Lock },
+  { value: 'deep', label: 'Deep', icon: Waves },
+  { value: 'love', label: 'Love', icon: Heart },
+  { value: 'life', label: 'Life', icon: Sprout },
+  { value: 'work', label: 'Work', icon: Briefcase },
+  { value: 'school', label: 'School', icon: GraduationCap },
+  { value: 'family', label: 'Family', icon: Home },
+  { value: 'funny', label: 'Funny', icon: Smile },
+  { value: 'midnight', label: 'Midnight', icon: Moon },
 ] as const;
 
 /** Composer nyata T1-032 / Fase 2 ZK Stealth — auth wajib, idempotency UUID, render plaintext. */
@@ -457,6 +468,7 @@ export function ComposerForm() {
             <div className="flex flex-wrap gap-1.5" role="radiogroup">
               {EMOTION_CATEGORIES.map((c) => {
                 const isSelected = category === c.value;
+                const Icon = c.icon;
                 return (
                   <button
                     key={c.value}
@@ -471,7 +483,7 @@ export function ComposerForm() {
                         : 'border-border/70 bg-background/50 text-muted-foreground hover:border-border hover:text-foreground',
                     )}
                   >
-                    <span aria-hidden="true">{c.icon}</span>
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>{c.label}</span>
                   </button>
                 );
@@ -498,7 +510,7 @@ export function ComposerForm() {
                 <option value="">Beranda Umum (Tanpa Kamar)</option>
                 {rooms.map((r) => (
                   <option key={r.slug} value={r.slug}>
-                    {r.icon} {r.name} (#{r.slug})
+                    {r.name} (#{r.slug})
                   </option>
                 ))}
               </select>
@@ -530,7 +542,7 @@ export function ComposerForm() {
                   {badges.map((b) => {
                     const meta = BADGE_META[b.type] ?? {
                       label: b.type,
-                      icon: '🏅',
+                      icon: 'shield-check',
                       color: 'border-border text-foreground',
                     };
                     const isSelected = selectedBadge === b.type;
@@ -540,14 +552,14 @@ export function ComposerForm() {
                         type="button"
                         onClick={() => setSelectedBadge(isSelected ? '' : b.type)}
                         className={cn(
-                          'rounded-full px-2.5 py-1 text-xs border transition-all flex items-center gap-1',
+                          'rounded-full px-2.5 py-1 text-xs border transition-all flex items-center gap-1.5',
                           isSelected
                             ? `${meta.color} font-semibold ring-1 ring-current`
                             : 'border-border text-muted-foreground hover:border-border/80',
                         )}
                         title={meta.desc}
                       >
-                        <span>{meta.icon}</span>
+                        <BadgeIcon type={b.type} className="h-3.5 w-3.5" />
                         <span>{meta.label}</span>
                       </button>
                     );

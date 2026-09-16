@@ -46,7 +46,7 @@ function RelatableInner() {
             </h1>
           </div>
           <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-            Diurutkan dari reaksi 🕯️ &ldquo;I understand&rdquo; terbanyak — resonansi rasa terdalam
+            Diurutkan dari reaksi &ldquo;I understand&rdquo; terbanyak — resonansi rasa terdalam
             dari sesama.
           </p>
         </div>

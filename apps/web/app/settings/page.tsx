@@ -16,6 +16,7 @@ import { useSession } from '@/lib/session';
 import { BADGE_META, getMyBadges, type UserBadgeItem } from '@/lib/booth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { BadgeIcon } from '@/components/icon-helpers';
 import { cn } from '@/lib/utils';
 
 /** T1-031: session nyata — visitor browse bebas, kontributor sign via wallet. */
@@ -173,9 +174,9 @@ export default function SettingsPage() {
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xl" aria-hidden="true">
-                        {meta.icon}
-                      </span>
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                        <BadgeIcon type={key} className="h-4 w-4" />
+                      </div>
                       <span className="font-semibold text-xs text-foreground">{meta.label}</span>
                     </div>
                     {isEarned ? (

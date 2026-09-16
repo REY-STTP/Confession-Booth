@@ -19,14 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BrandMark } from '@/components/brand-mark';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-const EMOJI: Record<string, string> = {
-  understand: '🕯️',
-  love: '❤️',
-  sad: '😭',
-  wild: '💀',
-  funny: '😂',
-};
+import { ReactionIcon, BadgeIcon } from '@/components/icon-helpers';
 
 export function BoothCard({ item }: { item: FeedItem }) {
   const [copied, setCopied] = React.useState(false);
@@ -48,7 +41,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
   const badgeMeta = item.badgeType
     ? (BADGE_META[item.badgeType] ?? {
         label: item.badgeType.replace(/_/g, ' '),
-        icon: '🏅',
+        icon: 'shield-check',
         desc: 'Lencana komunitas',
         color: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
       })
@@ -96,11 +89,11 @@ export function BoothCard({ item }: { item: FeedItem }) {
                 <TooltipTrigger asChild>
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium cursor-help transition-opacity hover:opacity-90',
+                      'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium cursor-help transition-opacity hover:opacity-90',
                       badgeMeta.color,
                     )}
                   >
-                    <span aria-hidden="true">{badgeMeta.icon}</span>
+                    <BadgeIcon type={item.badgeType ?? ''} className="h-3 w-3" />
                     <span>{badgeMeta.label}</span>
                   </span>
                 </TooltipTrigger>
@@ -166,9 +159,9 @@ export function BoothCard({ item }: { item: FeedItem }) {
               >
                 <span
                   aria-hidden="true"
-                  className="text-xs transition-transform group-hover:scale-110"
+                  className="transition-transform group-hover:scale-110 flex items-center"
                 >
-                  {EMOJI[k] ?? '•'}
+                  <ReactionIcon type={k} />
                 </span>
                 <span className="font-mono text-[11px] font-medium">{v}</span>
               </Link>

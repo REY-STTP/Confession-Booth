@@ -1,24 +1,67 @@
+# Dependencies
 node_modules/
+/.pnp
+.pnp.js
+
+# Build Outputs & Caches
 .next/
+apps/web/.next/
 out/
 dist/
 build/
-coverage/
-*.log
-.DS_Store
+packages/*/dist/
+apps/api/dist/
+.turbo/
+
+# Blockchain & Contracts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+typechain-types/
+
+# Environment & Secrets (Never commit production credentials)
 .env
 .env.local
 .env.*.local
+*.env
 !env.example
 !.env.example
-apps/web/.next/
-apps/api/dist/
-packages/*/dist/
-contracts/artifacts/
-contracts/cache/
-.husky/_/
-apps/web/test-results/
-apps/web/playwright-report/
-apps/web/blob-report/
-backups/
+
+# Local Database & Backups
+*.sqlite
+*.sqlite3
+*.db
 *.dump
+backups/
+storage/
+
+# Testing & Coverage
+coverage/
+test-results/
+apps/web/test-results/
+playwright-report/
+apps/web/playwright-report/
+blob-report/
+apps/web/blob-report/
+
+# Logs & Debugging
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Git & Tooling
+.husky/_/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE & Assistant Skills (Local only, not for production)
+.agents/
+.idea/
+.vscode/
+*.sublime-workspace
+skills-lock.json

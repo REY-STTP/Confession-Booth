@@ -2,11 +2,12 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Users, Sparkles, ArrowRight, ShieldCheck, PenLine, BookOpen } from 'lucide-react';
+import { Users, Sparkles, ArrowRight, ShieldCheck, PenLine, BookOpen, Award } from 'lucide-react';
 import { getRooms, type RoomItem, BADGE_META } from '@/lib/booth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RoomIcon, BadgeIcon } from '@/components/icon-helpers';
 
 export default function RoomsDirectoryPage() {
   const [rooms, setRooms] = React.useState<RoomItem[]>([]);
@@ -82,9 +83,9 @@ export default function RoomsDirectoryPage() {
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-2xl" aria-hidden="true">
-                        {r.icon}
-                      </span>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary group-hover:border-primary/40 transition-colors">
+                        <RoomIcon slug={r.slug} className="h-5 w-5" />
+                      </div>
                       <h3 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors">
                         {r.name}
                       </h3>
@@ -129,7 +130,8 @@ export default function RoomsDirectoryPage() {
       <section className="space-y-4 pt-4 border-t border-border/40">
         <div>
           <h2 className="text-base sm:text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
-            <span>🎖️ Lencana Reputasi Anonim (Soulbound Badges)</span>
+            <Award className="h-5 w-5 text-amber-400" />
+            <span>Lencana Reputasi Anonim (Soulbound Badges)</span>
           </h2>
           <p className="mt-1 text-xs text-muted-foreground leading-relaxed max-w-2xl">
             Reputasi terbukti secara kriptografis tanpa mengekspos profil atau alamat wallet Anda.
@@ -146,9 +148,9 @@ export default function RoomsDirectoryPage() {
             >
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xl" aria-hidden="true">
-                    {meta.icon}
-                  </span>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                    <BadgeIcon type={key} className="h-4 w-4" />
+                  </div>
                   <span className="font-semibold text-xs text-foreground">{meta.label}</span>
                 </div>
                 <p className="mt-2 text-[11px] text-muted-foreground leading-relaxed">

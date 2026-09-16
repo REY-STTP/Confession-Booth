@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { ArrowRight, ShieldCheck, Lock, EyeOff, PenLine, Moon } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Lock, EyeOff, PenLine, Moon, Sparkles } from 'lucide-react';
 import { BrandMark } from '@/components/brand-mark';
 import { Button } from '@/components/ui/button';
+import { ReactionIcon } from '@/components/icon-helpers';
 
 export default function Landing() {
   return (
@@ -137,7 +138,8 @@ export default function Landing() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span>🕯️ Bahasa Empati di Booth</span>
+              <Sparkles className="h-4 w-4 text-amber-400" />
+              <span>Bahasa Empati di Booth</span>
             </h3>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Bukan tombol like yang menghakimi, melainkan tanda bahwa Anda didengar dan dipahami:
@@ -154,17 +156,17 @@ export default function Landing() {
 
         <div className="flex flex-wrap gap-2 pt-2">
           {[
-            ['🕯️', 'I understand', 'Resonansi pengertian murni'],
-            ['❤️', 'Sending love', 'Dukungan hangat'],
-            ['😭', 'I feel this', 'Rasa yang sama'],
-            ['💀', 'That’s wild', 'Keterkejutan jujur'],
-            ['😂', 'I shouldn’t laugh', 'Tawa di balik duka'],
-          ].map(([emoji, label, desc]) => (
+            ['understand', 'I understand', 'Resonansi pengertian murni'],
+            ['love', 'Sending love', 'Dukungan hangat'],
+            ['sad', 'I feel this', 'Rasa yang sama'],
+            ['wild', 'That’s wild', 'Keterkejutan jujur'],
+            ['funny', 'I shouldn’t laugh', 'Tawa di balik duka'],
+          ].map(([key, label, desc]) => (
             <div
               key={label}
               className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/50 px-3.5 py-1.5 text-xs text-muted-foreground"
             >
-              <span aria-hidden="true">{emoji}</span>
+              <ReactionIcon type={key} className="h-3.5 w-3.5" />
               <span className="font-medium text-foreground">{label}</span>
               <span className="text-[10px] opacity-60 hidden md:inline">({desc})</span>
             </div>

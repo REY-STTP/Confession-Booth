@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BookOpen, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
+import { BookOpen, ShieldAlert, CheckCircle2, ArrowRight, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -106,7 +106,10 @@ export default function GuidelinesPage() {
               key={item.title}
               className="rounded-xl border border-border/70 bg-card/60 p-4 space-y-1 hover:border-destructive/40 transition-colors"
             >
-              <span className="text-xs font-semibold text-destructive block">✕ {item.title}</span>
+              <span className="text-xs font-semibold text-destructive flex items-center gap-1.5">
+                <XCircle className="h-3.5 w-3.5 shrink-0" />
+                <span>{item.title}</span>
+              </span>
               <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
             </div>
           ))}

@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, BookOpen, PenLine, Sparkles, TrendingUp, Flame } from 'lucide-react';
 import { BoothCard, Empty, SkeletonList } from '@/app/components/booth-card';
 import { getFeed, getRoom, type FeedItem, type RoomItem } from '@/lib/booth';
+import { RoomIcon } from '@/components/icon-helpers';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,9 +73,9 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
         <div className="rounded-2xl border border-border/80 bg-card/80 p-6 sm:p-7 space-y-4 shadow-sm backdrop-blur-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-3.5">
-              <span className="text-4xl" aria-hidden="true">
-                {room.icon}
-              </span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary shrink-0">
+                <RoomIcon slug={room.slug} className="h-6 w-6" />
+              </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">

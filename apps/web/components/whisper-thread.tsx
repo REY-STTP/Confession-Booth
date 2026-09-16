@@ -1,12 +1,12 @@
 'use client';
 
-import * as React from 'react';
-import { Reply, Clock, ShieldAlert } from 'lucide-react';
+import { Reply, Clock, ShieldAlert, MessageSquare } from 'lucide-react';
 import { timeAgo, type WhisperItem, BADGE_META } from '@/lib/booth';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { BrandMark } from '@/components/brand-mark';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { BadgeIcon } from '@/components/icon-helpers';
 
 interface WhisperThreadProps {
   whispers: WhisperItem[];
@@ -73,7 +73,7 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
                         badgeMeta.color,
                       )}
                     >
-                      <span aria-hidden="true">{badgeMeta.icon}</span>
+                      <BadgeIcon type={w.badgeType ?? ''} className="h-3 w-3" />
                       <span>{badgeMeta.label}</span>
                     </span>
                   </TooltipTrigger>
@@ -111,8 +111,9 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
             </button>
 
             {replies.length > 0 ? (
-              <span className="font-mono text-[11px] text-muted-foreground">
-                🧵 {replies.length} balasan
+              <span className="font-mono text-[11px] text-muted-foreground flex items-center gap-1">
+                <MessageSquare className="h-3 w-3 opacity-60" aria-hidden="true" />
+                <span>{replies.length} balasan</span>
               </span>
             ) : null}
           </div>

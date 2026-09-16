@@ -13,12 +13,14 @@ import {
   AlertTriangle,
   ArrowLeft,
   MessageSquare,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BoothCard } from '@/app/components/booth-card';
 import { ProofInspector } from '@/components/proof-inspector';
 import { WhisperThread } from '@/components/whisper-thread';
 import { ReportDialog } from '@/components/report-dialog';
+import { ReactionIcon, BadgeIcon } from '@/components/icon-helpers';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,11 +35,11 @@ import {
 import { useSession, apiFetch } from '@/lib/session';
 
 const REACTION_BUTTONS = [
-  { type: 'UNDERSTAND', emoji: '🕯️', label: 'Understand' },
-  { type: 'LOVE', emoji: '❤️', label: 'Love' },
-  { type: 'SAD', emoji: '😭', label: 'Sad' },
-  { type: 'WILD', emoji: '💀', label: 'Wild' },
-  { type: 'FUNNY', emoji: '😂', label: 'Funny' },
+  { type: 'UNDERSTAND', label: 'Understand' },
+  { type: 'LOVE', label: 'Love' },
+  { type: 'SAD', label: 'Sad' },
+  { type: 'WILD', label: 'Wild' },
+  { type: 'FUNNY', label: 'Funny' },
 ] as const;
 
 /** T1-032 / T3-001 / T3-002: Detail confession dengan Confession Chains, OP tag, dan lencana. */
@@ -298,7 +300,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
         aria-label="Beri reaksi dan aksi"
       >
         <div className="flex flex-wrap items-center gap-1.5 flex-1">
-          {REACTION_BUTTONS.map(({ type: t, emoji, label }) => {
+          {REACTION_BUTTONS.map(({ type: t, label }) => {
             const isPressed = Boolean(reacted[t]);
             const count = item.reactions[t.toLowerCase()] ?? 0;
 
@@ -314,7 +316,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                     : 'border-border/80 bg-background/50 text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border'
                 }`}
               >
-                <span aria-hidden="true">{emoji}</span>
+                <ReactionIcon type={t} />
                 <span>{label}</span>
                 {count > 0 ? (
                   <span className="font-mono text-[11px] opacity-80">({count})</span>
@@ -384,9 +386,10 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
               <button
                 type="button"
                 onClick={() => setReplyTo(null)}
-                className="font-semibold ml-2 hover:underline text-foreground"
+                className="inline-flex items-center gap-1 font-semibold ml-2 hover:underline text-foreground"
               >
-                ✕ Batal
+                <X className="h-3 w-3" />
+                <span>Batal</span>
               </button>
             </div>
           ) : null}
@@ -454,7 +457,7 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                             : 'border-border text-muted-foreground hover:border-border/80'
                         }`}
                       >
-                        <span>{meta.icon}</span>
+                        <BadgeIcon type={b.type} className="h-3 w-3" />
                         <span>{meta.label}</span>
                       </button>
                     );
