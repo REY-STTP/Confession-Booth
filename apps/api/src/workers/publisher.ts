@@ -21,6 +21,8 @@ export interface PublisherEnv extends ChainEnv {
   batch?: number;
   /** Timeout receipt per tx (default 60s; test memakai nilai kecil). */
   receiptTimeoutMs?: number;
+  /** Konfirmasi blok yang ditunggu (default 3 untuk reorg safety; 1 pada local testnet / dev). */
+  confirmations?: number;
   /** Gas price config untuk EIP-1559 */
   maxFeePerGas?: bigint;
   maxPriorityFeePerGas?: bigint;
@@ -129,9 +131,10 @@ export async function publisherTick(
           WHERE id = ${p.id}::uuid
         `);
       }
+      const confirmations = E.confirmations ?? (E.chainId === 31337 ? 1 : 3);
       const receipt = await pub.waitForTransactionReceipt({
         hash,
-        confirmations: 3, // T1H-002: 3 confirmations untuk reorg safety
+        confirmations, // T1H-002: 3 confirmations untuk reorg safety (1 pada local testnet 31337)
         timeout: E.receiptTimeoutMs ?? 60_000,
       });
       // T1H-002: Verify transaction still valid after confirmations (reorg check)
