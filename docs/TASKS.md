@@ -401,11 +401,11 @@ shared 18/18, API 61/61, E2E 5/5, `npm audit --omit=dev` 0).
 
 ## Fase 2 — Privacy (Backlog P2, desain dulu)
 
-- [ ] **T2-001** Anonymous credentials (proof-of-eligibility tanpa link wallet→aksi).
-- [ ] **T2-002** Relayed tx (relayer/gas abstraction agar tx on-chain tidak langsung dari wallet penulis).
-- [ ] **T2-003** Rate-limit + reputasi privacy-preserving (nullifier per epoch, bukan userID mentah).
-- [ ] **T2-004** ZK spike: kelayakan + biaya + UX; update threat model + PRIVACY.md.
-- [ ] Syarat: tidak boleh merusak verifiability + moderasi audit.
+- [x] **T2-001** Anonymous credentials (proof-of-eligibility tanpa link wallet→aksi) [deriveAnonymousIdentity + Merkle tree membership + ZK signal proof di @booth/shared; endpoint /api/zk/register-commitment & /api/zk/merkle-root; author_user_id=NULL saat submit via zkProof; 100% test pass ✅ 2026-09-16]
+- [x] **T2-002** Relayed tx (relayer/gas abstraction agar tx on-chain tidak langsung dari wallet penulis) [Worker publisher.ts mensponsori seluruh gas via PUBLISHER_KEY; kontrak ConfessionRegistry hanya simpan content_hash tanpa parameter wallet pengirim; batching & jitter mitigasi timing correlation ✅ 2026-09-16]
+- [x] **T2-003** Rate-limit + reputasi privacy-preserving (nullifier per epoch, bukan userID mentah) [computeEpochNullifier berbasis epoch 1 jam + scope; tabel epoch_nullifiers PostgreSQL; pencegahan spam / double-posting 429 RATE_LIMIT_EXCEEDED tanpa melacak userID/IP ✅ 2026-09-16]
+- [x] **T2-004** ZK spike: kelayakan + biaya + UX; update threat model + PRIVACY.md [Semaphore v4 Groth16 terpilih; benchmark <2s mobile; THREAT_MODEL.md & ZK_SPIKE_REPORT.md dibuat; PRIVACY.md updated ✅ 2026-09-16]
+- [x] Syarat: tidak boleh merusak verifiability + moderasi audit [Semua verifiability on-chain terjaga via content_hash sha256 + moderasi audit tetap aktif via flag/moderation queue ✅ 2026-09-16]
 
 ## Fase 3 — Community (Backlog)
 

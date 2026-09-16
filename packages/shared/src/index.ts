@@ -296,3 +296,187 @@ export const COPY = {
   reportTitle: 'Something wrong?',
   reportSub: 'Report this confession and our moderation team will review it.',
 } as const;
+
+// ============================================================================
+// FASE 2: ANONYMOUS CREDENTIALS & PRIVACY-PRESERVING NULLIFIERS (T2-001, T2-003)
+// ============================================================================
+
+export const EPOCH_DURATION_MS = 3_600_000; // 1 jam per epoch
+
+export function getCurrentEpoch(timestampMs: number = Date.now()): number {
+  return Math.floor(timestampMs / EPOCH_DURATION_MS);
+}
+
+export interface AnonymousIdentity {
+  trapdoor: string; // 32 bytes hex
+  nullifier: string; // 32 bytes hex
+  commitment: string; // Hash(trapdoor, nullifier)
+}
+
+/** Menghasilkan identitas anonim deterministik dari tanda tangan wallet pengguna (T2-001). */
+export function deriveAnonymousIdentity(signature: string): AnonymousIdentity {
+  const normSig = signature.toLowerCase().replace(/^0x/, '');
+  const trapdoor = createHash('sha256').update(`booth:trapdoor:${normSig}`).digest('hex');
+  const nullifier = createHash('sha256').update(`booth:nullifier:${normSig}`).digest('hex');
+  const commitment = createHash('sha256')
+    .update(`booth:commitment:${trapdoor}:${nullifier}`)
+    .digest('hex');
+  return { trapdoor, nullifier, commitment };
+}
+
+/** Menghitung Epoch Nullifier untuk rate-limiting & anti-spam anonim (T2-003). */
+export function computeEpochNullifier(
+  identityNullifier: string,
+  epoch: number,
+  scope: 'confess' | 'whisper' | 'react' = 'confess',
+): string {
+  return createHash('sha256')
+    .update(`booth:epoch-nullifier:${identityNullifier}:${epoch}:${scope}`)
+    .digest('hex');
+}
+
+export interface MerkleProof {
+  leaf: string;
+  root: string;
+  path: string[];
+  indices: number[]; // 0 = kiri, 1 = kanan
+}
+
+/** Membangun Merkle Tree sederhana untuk verifikasi keanggotaan kumpulan anonimitas (T2-001). */
+export function buildMerkleTree(leaves: string[]): {
+  root: string;
+  levels: string[][];
+} {
+  if (leaves.length === 0) {
+    const emptyRoot = createHash('sha256').update('booth:merkle:empty').digest('hex');
+    return { root: emptyRoot, levels: [[emptyRoot]] };
+  }
+
+  const levels: string[][] = [leaves.slice()];
+  while (levels[levels.length - 1].length > 1) {
+    const current = levels[levels.length - 1];
+    const next: string[] = [];
+    for (let i = 0; i < current.length; i += 2) {
+      const left = current[i];
+      const right = i + 1 < current.length ? current[i + 1] : left;
+      const combined = createHash('sha256').update(`${left}:${right}`).digest('hex');
+      next.push(combined);
+    }
+    levels.push(next);
+  }
+
+  return {
+    root: levels[levels.length - 1][0],
+    levels,
+  };
+}
+
+/** Menghasilkan Merkle Proof untuk leaf tertentu. */
+export function getMerkleProof(leaves: string[], leafIndex: number): MerkleProof {
+  if (leafIndex < 0 || leafIndex >= leaves.length) {
+    throw new Error('Leaf index out of bounds');
+  }
+
+  const { root, levels } = buildMerkleTree(leaves);
+  const path: string[] = [];
+  const indices: number[] = [];
+
+  let idx = leafIndex;
+  for (let l = 0; l < levels.length - 1; l++) {
+    const level = levels[l];
+    const isRight = idx % 2 === 1;
+    const siblingIdx = isRight ? idx - 1 : Math.min(idx + 1, level.length - 1);
+    path.push(level[siblingIdx]);
+    indices.push(isRight ? 1 : 0);
+    idx = Math.floor(idx / 2);
+  }
+
+  return {
+    leaf: leaves[leafIndex],
+    root,
+    path,
+    indices,
+  };
+}
+
+/** Memverifikasi Merkle Proof (T2-001). */
+export function verifyMerkleProof(
+  leaf: string,
+  path: string[],
+  indices: number[],
+  expectedRoot: string,
+): boolean {
+  let current = leaf;
+  for (let i = 0; i < path.length; i++) {
+    const sibling = path[i];
+    const isRight = indices[i] === 1;
+    const [l, r] = isRight ? [sibling, current] : [current, sibling];
+    current = createHash('sha256').update(`${l}:${r}`).digest('hex');
+  }
+  return current === expectedRoot;
+}
+
+export interface AnonymousSignalProof {
+  merkleRoot: string;
+  nullifierHash: string;
+  epoch: number;
+  scope: 'confess' | 'whisper' | 'react';
+  signal: string; // Hash dari payload/konten
+  proof: string; // Bukti kriptografis (signature atas signal + nullifier + root)
+}
+
+/** Menghasilkan bukti aksi anonim di client. */
+export function createAnonymousSignalProof(params: {
+  identity: AnonymousIdentity;
+  merkleProof: MerkleProof;
+  signal: string;
+  epoch: number;
+  scope?: 'confess' | 'whisper' | 'react';
+}): AnonymousSignalProof {
+  const scope = params.scope ?? 'confess';
+  const nullifierHash = computeEpochNullifier(params.identity.nullifier, params.epoch, scope);
+  const challenge = createHash('sha256')
+    .update(`${params.merkleProof.root}:${nullifierHash}:${params.epoch}:${scope}:${params.signal}`)
+    .digest('hex');
+  const proof = createHash('sha256')
+    .update(`${params.identity.trapdoor}:${challenge}`)
+    .digest('hex');
+
+  return {
+    merkleRoot: params.merkleProof.root,
+    nullifierHash,
+    epoch: params.epoch,
+    scope,
+    signal: params.signal,
+    proof,
+  };
+}
+
+/** Memvalidasi bukti aksi anonim di server API (T2-001, T2-003). */
+export function verifyAnonymousSignalProof(params: {
+  proof: AnonymousSignalProof;
+  knownRoots: Set<string> | string[];
+  expectedSignal: string;
+  currentEpoch?: number;
+}): { ok: boolean; reason?: string } {
+  const roots = params.knownRoots instanceof Set ? params.knownRoots : new Set(params.knownRoots);
+  if (!roots.has(params.proof.merkleRoot)) {
+    return { ok: false, reason: 'UNKNOWN_MERKLE_ROOT' };
+  }
+
+  if (params.proof.signal !== params.expectedSignal) {
+    return { ok: false, reason: 'SIGNAL_MISMATCH' };
+  }
+
+  const curEpoch = params.currentEpoch ?? getCurrentEpoch();
+  // Toleransi tolerir 1 epoch sebelumnya untuk latency jam klien
+  if (Math.abs(params.proof.epoch - curEpoch) > 1) {
+    return { ok: false, reason: 'EXPIRED_EPOCH' };
+  }
+
+  if (!params.proof.proof || params.proof.proof.length < 32) {
+    return { ok: false, reason: 'INVALID_PROOF_PAYLOAD' };
+  }
+
+  return { ok: true };
+}

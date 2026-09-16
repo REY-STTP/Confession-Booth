@@ -23,6 +23,7 @@ import {
   index,
   unique,
   primaryKey,
+  serial,
 } from 'drizzle-orm/pg-core';
 
 export const userStatus = pgEnum('user_status', ['ACTIVE', 'BANNED', 'RESTRICTED']);
@@ -122,9 +123,7 @@ export const confessions = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     publicId: varchar('public_id', { length: 64 }).notNull().unique(),
-    authorUserId: uuid('author_user_id')
-      .notNull()
-      .references(() => users.id),
+    authorUserId: uuid('author_user_id').references(() => users.id),
     categoryId: uuid('category_id')
       .notNull()
       .references(() => categories.id),
@@ -139,10 +138,13 @@ export const confessions = pgTable(
     hiddenAt: ts('hidden_at'),
     version: integer('version').notNull().default(1),
     moderationScore: numeric('moderation_score', { precision: 5, scale: 2 }).notNull().default('0'),
+    nullifierHash: varchar('nullifier_hash', { length: 128 }),
+    proofType: varchar('proof_type', { length: 32 }).notNull().default('SESSION'),
   },
   (t) => [
     index('idx_confessions_feed').on(t.status, t.createdAt),
     index('idx_confessions_category').on(t.categoryId, t.status, t.createdAt),
+    index('idx_confessions_nullifier').on(t.nullifierHash),
   ],
 );
 
@@ -295,3 +297,30 @@ export const indexerState = pgTable('indexer_state', {
   lastBlock: bigint('last_block', { mode: 'number' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Fase 2: Anonymous Credentials & Nullifiers
+export const identityCommitments = pgTable(
+  'identity_commitments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    commitment: varchar('commitment', { length: 128 }).notNull().unique(),
+    leafIndex: serial('leaf_index').notNull().unique(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_commitments_index').on(t.leafIndex)],
+);
+
+export const epochNullifiers = pgTable(
+  'epoch_nullifiers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    nullifierHash: varchar('nullifier_hash', { length: 128 }).notNull(),
+    epoch: integer('epoch').notNull(),
+    scope: varchar('scope', { length: 32 }).notNull().default('confess'),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('uq_epoch_nullifier').on(t.nullifierHash, t.epoch, t.scope),
+    index('idx_epoch_nullifiers_lookup').on(t.nullifierHash, t.epoch, t.scope),
+  ],
+);

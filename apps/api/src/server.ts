@@ -39,6 +39,7 @@ import {
   CONFESSION_MAX,
   WHISPER_MAX,
 } from './validate.js';
+import { buildMerkleTree, verifyAnonymousSignalProof, getCurrentEpoch } from '@booth/shared';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -96,11 +97,9 @@ function checkCsrf(req: FastifyRequest, reply: FastifyReply): boolean {
   const origin = req.headers.origin as string | undefined;
   // Reject requests with missing or null origin for cookie-based endpoints
   if (!origin || origin === 'null') {
-    reply
-      .code(403)
-      .send({
-        error: { code: 'FORBIDDEN', message: 'Origin header required for cookie endpoints.' },
-      });
+    reply.code(403).send({
+      error: { code: 'FORBIDDEN', message: 'Origin header required for cookie endpoints.' },
+    });
     return false;
   }
   try {
@@ -546,18 +545,80 @@ export async function buildApp(): Promise<FastifyInstance> {
     };
   });
 
-  // --- POST /confessions (T1-010): auth wajib, VISIBLE langsung, publikasi PENDING_CHAIN.
+  // --- ZK Anonymous Credentials & Merkle Tree (T2-001, T2-003) ---
+  app.post('/api/zk/register-commitment', async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const bodySchema = z.object({
+      commitment: z.string().regex(/^[0-9a-fA-F]{64}$/),
+    });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({
+          error: { code: 'INVALID_COMMITMENT', message: 'Invalid 32-byte hex commitment.' },
+        });
+    }
+
+    const db = getDb();
+    const commitment = parsed.data.commitment.toLowerCase();
+    await db
+      .insert(schema.identityCommitments)
+      .values({ commitment })
+      .onConflictDoNothing({ target: schema.identityCommitments.commitment });
+
+    const all = rowsOf<{ commitment: string; leaf_index: number }>(
+      await db.execute(
+        sql`SELECT commitment, leaf_index FROM identity_commitments ORDER BY leaf_index ASC`,
+      ),
+    );
+    const leaves = all.map((r) => r.commitment);
+    const { root } = buildMerkleTree(leaves);
+    const myLeaf = all.find((r) => r.commitment === commitment);
+
+    return {
+      ok: true,
+      root,
+      leafIndex: myLeaf?.leaf_index ?? 0,
+      totalMembers: leaves.length,
+    };
+  });
+
+  app.get('/api/zk/merkle-root', async (_req, _reply) => {
+    const db = getDb();
+    const all = rowsOf<{ commitment: string; leaf_index: number }>(
+      await db.execute(
+        sql`SELECT commitment, leaf_index FROM identity_commitments ORDER BY leaf_index ASC`,
+      ),
+    );
+    const leaves = all.map((r) => r.commitment);
+    const { root } = buildMerkleTree(leaves);
+    return {
+      root,
+      totalMembers: leaves.length,
+      commitments: leaves,
+    };
+  });
+
+  // --- POST /confessions (T1-010, T2-001, T2-003): ZK anonymous atau auth sesi.
   // Zod max 2000 = guard body; aturan produk 500 ditegakkan checkContent (didokumentasikan T1-024). ---
   const confessBody = z.object({
     category: z.string().min(1).max(64),
     content: z.string().min(1).max(2000),
+    zkProof: z
+      .object({
+        merkleRoot: z.string().min(16),
+        nullifierHash: z.string().min(16),
+        epoch: z.number().int(),
+        scope: z.literal('confess'),
+        signal: z.string().min(16),
+        proof: z.string().min(16),
+      })
+      .optional(),
   });
 
   app.post('/api/confessions', async (req, reply) => {
-    if (!requireAuth(req, reply)) return;
     const db = getDb();
-    const userId = req.user!.id;
-
     const parsed = confessBody.safeParse(req.body);
     if (!parsed.success) {
       return reply
@@ -576,7 +637,6 @@ export async function buildApp(): Promise<FastifyInstance> {
         .code(400)
         .send({ error: { code: 'INVALID_CONTENT', message: v.errors.join(',') } });
     }
-    if (!(await rateLimitOr429(reply, `user:${userId}`, 'confess'))) return;
 
     const cats = rowsOf<{ id: string }>(
       await db.execute(
@@ -590,38 +650,110 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
 
     const contentHash = canonicalHash(content);
-    const dup = rowsOf<{ one: number }>(
-      await db.execute(sql`
-        SELECT 1 AS one FROM confessions c
-        JOIN content_objects co ON co.id = c.content_object_id
-        WHERE c.author_user_id = ${userId}::uuid
-          AND co.content_hash = ${contentHash}
-          AND c.created_at > now() - interval '24 hours'
-        LIMIT 1
-      `),
-    );
-    if (dup.length > 0) {
-      return reply
-        .code(409)
-        .send({ error: { code: 'CONTENT_DUPLICATE', message: 'Duplicate confession.' } });
+    let userId: string | null = null;
+    let nullifierHash: string | null = null;
+    let proofType = 'SESSION';
+
+    if (parsed.data.zkProof) {
+      const zk = parsed.data.zkProof;
+      if (zk.signal !== contentHash) {
+        return reply
+          .code(400)
+          .send({
+            error: {
+              code: 'SIGNAL_MISMATCH',
+              message: 'ZK proof signal does not match content hash.',
+            },
+          });
+      }
+
+      const all = rowsOf<{ commitment: string }>(
+        await db.execute(sql`SELECT commitment FROM identity_commitments ORDER BY leaf_index ASC`),
+      );
+      const leaves = all.map((r) => r.commitment);
+      const { root: currentRoot } = buildMerkleTree(leaves);
+
+      const vProof = verifyAnonymousSignalProof({
+        proof: zk,
+        knownRoots: [currentRoot],
+        expectedSignal: contentHash,
+      });
+      if (!vProof.ok) {
+        return reply
+          .code(400)
+          .send({
+            error: {
+              code: vProof.reason ?? 'INVALID_PROOF',
+              message: 'Anonymous ZK proof invalid.',
+            },
+          });
+      }
+
+      // T2-003: Anti-spam epoch nullifier
+      const existingNullifier = rowsOf<{ id: string }>(
+        await db.execute(sql`
+          SELECT id FROM epoch_nullifiers
+          WHERE nullifier_hash = ${zk.nullifierHash}
+            AND epoch = ${zk.epoch}
+            AND scope = 'confess'
+          LIMIT 1
+        `),
+      );
+      if (existingNullifier.length > 0) {
+        return reply
+          .code(429)
+          .send({
+            error: {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: 'Anonymous rate limit reached for this epoch.',
+            },
+          });
+      }
+
+      nullifierHash = zk.nullifierHash;
+      proofType = 'ZK';
+    } else {
+      if (!requireAuth(req, reply)) return;
+      userId = req.user!.id;
+      if (!(await rateLimitOr429(reply, `user:${userId}`, 'confess'))) return;
+
+      const dup = rowsOf<{ one: number }>(
+        await db.execute(sql`
+          SELECT 1 AS one FROM confessions c
+          JOIN content_objects co ON co.id = c.content_object_id
+          WHERE c.author_user_id = ${userId}::uuid
+            AND co.content_hash = ${contentHash}
+            AND c.created_at > now() - interval '24 hours'
+          LIMIT 1
+        `),
+      );
+      if (dup.length > 0) {
+        return reply
+          .code(409)
+          .send({ error: { code: 'CONTENT_DUPLICATE', message: 'Duplicate confession.' } });
+      }
     }
 
-    const recent = rowsOf<{ n: string }>(
-      await db.execute(sql`
-        SELECT count(*) AS n FROM confessions
-        WHERE author_user_id = ${userId}::uuid AND created_at > now() - interval '1 hour'
-      `),
-    );
+    const recent = userId
+      ? rowsOf<{ n: string }>(
+          await db.execute(sql`
+            SELECT count(*) AS n FROM confessions
+            WHERE author_user_id = ${userId}::uuid AND created_at > now() - interval '1 hour'
+          `),
+        )
+      : [];
     // T1H-005: sertakan report terbuka 24 jam terakhir agar akun bermasalah tereskalasi PoW.
-    const openRep = rowsOf<{ n: string }>(
-      await db.execute(sql`
-        SELECT count(*) AS n FROM reports r
-        JOIN confessions c ON c.id = r.target_id AND r.target_type = 'CONFESSION'
-        WHERE c.author_user_id = ${userId}::uuid
-          AND r.status IN ('OPEN', 'REVIEWING')
-          AND r.created_at > now() - interval '24 hours'
-      `),
-    );
+    const openRep = userId
+      ? rowsOf<{ n: string }>(
+          await db.execute(sql`
+            SELECT count(*) AS n FROM reports r
+            JOIN confessions c ON c.id = r.target_id AND r.target_type = 'CONFESSION'
+            WHERE c.author_user_id = ${userId}::uuid
+              AND r.status IN ('OPEN', 'REVIEWING')
+              AND r.created_at > now() - interval '24 hours'
+          `),
+        )
+      : [];
     const verdict = scoreAbuse({
       recentCount: Number(recent[0]?.n ?? 0),
       isDuplicate: false,
@@ -649,6 +781,14 @@ export async function buildApp(): Promise<FastifyInstance> {
       const now = new Date();
       const ref = await getStorage().put(contentHash, content);
       const created = await db.transaction(async (tx) => {
+        if (nullifierHash && parsed.data.zkProof) {
+          await tx.insert(schema.epochNullifiers).values({
+            nullifierHash,
+            epoch: parsed.data.zkProof.epoch,
+            scope: 'confess',
+          });
+        }
+
         const co = await tx
           .insert(schema.contentObjects)
           .values({ contentHash, storageProvider: ref.provider, storageCid: ref.cid })
@@ -675,6 +815,8 @@ export async function buildApp(): Promise<FastifyInstance> {
             status: 'VISIBLE',
             publishedAt: now,
             moderationScore: String(verdict.score),
+            nullifierHash,
+            proofType,
           })
           .returning({ id: schema.confessions.id });
         await tx.insert(schema.publications).values({
@@ -696,12 +838,13 @@ export async function buildApp(): Promise<FastifyInstance> {
           status: 'visible',
           publicId,
           author: { displayName: displayName(seed) },
+          proofType,
         },
       };
     };
 
     const idemKey = req.headers['idempotency-key'];
-    if (typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128) {
+    if (userId && typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128) {
       const r = await withIdempotency(db, userId, idemKey, create);
       return reply.code(r.statusCode).send(r.body);
     }
@@ -1162,7 +1305,7 @@ export async function buildApp(): Promise<FastifyInstance> {
             .where(eq(schema.whispers.id, target.id));
         }
       }
-      if (action === 'RESTRICT' || action === 'BAN') {
+      if ((action === 'RESTRICT' || action === 'BAN') && target.authorUserId) {
         await tx
           .update(schema.users)
           .set({ status: action === 'BAN' ? 'BANNED' : 'RESTRICTED' })

@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { buildApp } from './server.js';
 import { getDb } from './db/client.js';
 import { sha256hex } from './auth.js';
+import { config } from './config.js';
 
 const app = await buildApp();
 const db = getDb();
@@ -189,7 +190,7 @@ describe('auth wallet (T1-002)', () => {
     const ip = '10.10.0.19';
     const { vRes } = await loginAs(A, ip);
     const cookie = String(vRes.headers['set-cookie']).split(';')[0];
-    const origin = 'http://localhost:3000';
+    const origin = config.corsOrigin[0]?.trim() || 'http://localhost:3000';
     const r1 = await app.inject({
       method: 'POST',
       url: '/api/auth/refresh',

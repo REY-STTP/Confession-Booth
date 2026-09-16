@@ -15,6 +15,14 @@ import {
   isReactionType,
   isReportReason,
   escapeHtml,
+  deriveAnonymousIdentity,
+  computeEpochNullifier,
+  buildMerkleTree,
+  getMerkleProof,
+  verifyMerkleProof,
+  createAnonymousSignalProof,
+  verifyAnonymousSignalProof,
+  getCurrentEpoch,
 } from './index.js';
 
 describe('countChars (Unicode)', () => {
@@ -50,7 +58,9 @@ describe('validateConfession', () => {
     }
   });
   it('tolak link di MVP', () => {
-    assert.ok(validateConfession('lihat https://example.com').errors.includes('LINKS_NOT_ALLOWED_MVP'));
+    assert.ok(
+      validateConfession('lihat https://example.com').errors.includes('LINKS_NOT_ALLOWED_MVP'),
+    );
   });
   it('tolak control characters', () => {
     assert.ok(validateConfession('halo\x00dunia').errors.includes('CONTROL_CHARACTERS'));
@@ -68,13 +78,26 @@ describe('validateConfession', () => {
 
 describe('kategori/reaksi/report', () => {
   it('11 kategori valid', () => {
-    for (const s of ['love', 'heartbreak', 'secret', 'life', 'school', 'work', 'family', 'funny', 'sad', 'deep', 'midnight']) {
+    for (const s of [
+      'love',
+      'heartbreak',
+      'secret',
+      'life',
+      'school',
+      'work',
+      'family',
+      'funny',
+      'sad',
+      'deep',
+      'midnight',
+    ]) {
       assert.equal(isCategorySlug(s), true);
     }
     assert.equal(isCategorySlug('TOKEN'), false);
   });
   it('5 reaksi valid', () => {
-    for (const t of ['UNDERSTAND', 'LOVE', 'SAD', 'WILD', 'FUNNY']) assert.equal(isReactionType(t), true);
+    for (const t of ['UNDERSTAND', 'LOVE', 'SAD', 'WILD', 'FUNNY'])
+      assert.equal(isReactionType(t), true);
     assert.equal(isReactionType('LIKE'), false);
   });
   it('11 reason report valid', () => {
@@ -127,5 +150,96 @@ describe('ranking', () => {
     const a = relatableScore({ understand: 90, total: 100, ageHours: 5 });
     const b = relatableScore({ understand: 10, total: 100, ageHours: 5 });
     assert.ok(a > b);
+  });
+});
+
+describe('Fase 2: Anonymous Credentials & Nullifiers (T2-001, T2-003)', () => {
+  it('deriveAnonymousIdentity deterministik dari signature yang sama', () => {
+    const sig = '0xabcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd';
+    const id1 = deriveAnonymousIdentity(sig);
+    const id2 = deriveAnonymousIdentity(sig);
+    assert.equal(id1.trapdoor, id2.trapdoor);
+    assert.equal(id1.nullifier, id2.nullifier);
+    assert.equal(id1.commitment, id2.commitment);
+    assert.match(id1.commitment, /^[0-9a-f]{64}$/);
+
+    const diffId = deriveAnonymousIdentity('0xdifferent');
+    assert.notEqual(diffId.commitment, id1.commitment);
+  });
+
+  it('computeEpochNullifier unik per epoch dan scope', () => {
+    const id = deriveAnonymousIdentity('0xsignature');
+    const n1 = computeEpochNullifier(id.nullifier, 100, 'confess');
+    const n2 = computeEpochNullifier(id.nullifier, 100, 'confess');
+    const nNextEpoch = computeEpochNullifier(id.nullifier, 101, 'confess');
+    const nOtherScope = computeEpochNullifier(id.nullifier, 100, 'whisper');
+
+    assert.equal(n1, n2);
+    assert.notEqual(n1, nNextEpoch);
+    assert.notEqual(n1, nOtherScope);
+  });
+
+  it('Merkle Tree: bukti dan verifikasi keanggotaan valid', () => {
+    const idA = deriveAnonymousIdentity('0xsigA');
+    const idB = deriveAnonymousIdentity('0xsigB');
+    const idC = deriveAnonymousIdentity('0xsigC');
+    const idD = deriveAnonymousIdentity('0xsigD');
+    const leaves = [idA.commitment, idB.commitment, idC.commitment, idD.commitment];
+
+    const { root } = buildMerkleTree(leaves);
+    assert.match(root, /^[0-9a-f]{64}$/);
+
+    const proofA = getMerkleProof(leaves, 0);
+    assert.equal(verifyMerkleProof(proofA.leaf, proofA.path, proofA.indices, root), true);
+
+    const proofC = getMerkleProof(leaves, 2);
+    assert.equal(verifyMerkleProof(proofC.leaf, proofC.path, proofC.indices, root), true);
+
+    // Bukti salah / dipalsukan
+    assert.equal(verifyMerkleProof(idD.commitment, proofA.path, proofA.indices, root), false);
+  });
+
+  it('AnonymousSignalProof: alur pembuktian dan verifikasi end-to-end', () => {
+    const id = deriveAnonymousIdentity('0xuserSecretSignature');
+    const leaves = [id.commitment, deriveAnonymousIdentity('0xother').commitment];
+    const merkleProof = getMerkleProof(leaves, 0);
+    const signal = 'content_hash_123456';
+    const epoch = getCurrentEpoch();
+
+    const proof = createAnonymousSignalProof({
+      identity: id,
+      merkleProof,
+      signal,
+      epoch,
+      scope: 'confess',
+    });
+
+    const vValid = verifyAnonymousSignalProof({
+      proof,
+      knownRoots: [merkleProof.root],
+      expectedSignal: signal,
+      currentEpoch: epoch,
+    });
+    assert.equal(vValid.ok, true);
+
+    // Ditolak bila signal diubah (tamper)
+    const vTamper = verifyAnonymousSignalProof({
+      proof,
+      knownRoots: [merkleProof.root],
+      expectedSignal: 'different_signal',
+      currentEpoch: epoch,
+    });
+    assert.equal(vTamper.ok, false);
+    assert.equal(vTamper.reason, 'SIGNAL_MISMATCH');
+
+    // Ditolak bila root tidak dikenal
+    const vUnknownRoot = verifyAnonymousSignalProof({
+      proof,
+      knownRoots: ['0xunknownroot'],
+      expectedSignal: signal,
+      currentEpoch: epoch,
+    });
+    assert.equal(vUnknownRoot.ok, false);
+    assert.equal(vUnknownRoot.reason, 'UNKNOWN_MERKLE_ROOT');
   });
 });

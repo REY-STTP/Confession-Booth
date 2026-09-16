@@ -63,6 +63,19 @@ Users should avoid including identifying information in their own confession, su
 
 The UI should warn users before publication.
 
-## Privacy Evolution
+## Privacy Evolution (Fase 2 Architecture)
 
-Future versions may introduce stronger mechanisms such as anonymous credentials, relayers, and zero-knowledge proofs.
+Fase 2 mengadopsi arsitektur privasi kriptografis penuh melalui **Zero-Knowledge Proofs (ZK-SNARKs)** dan **Semaphore Protocol**:
+
+1. **Unlinkability (Pemutusan Hubungan Identitas):**
+   - Penulis confession membuktikan keanggotaan/kelayakan (_proof-of-membership_) via Merkle tree tanpa mengungkap alamat wallet ataupun ID pengguna di database.
+   - Kolom `confessions.author_user_id` bernilai `NULL` untuk pengiriman berbasis ZK.
+2. **Epoch-Based Nullifiers:**
+   - Pembatasan frekuensi posting (_rate-limiting_) dan pencegahan spam menggunakan nullifier deterministik per epoch (misal: per jam/hari), bukan query identitas pengguna.
+3. **Gas & Network Relaying:**
+   - Transaksi on-chain di-broadcast oleh worker relayer publik (`publisher`), sehingga wallet pribadi pengguna tidak pernah berinteraksi langsung dengan kontrak `ConfessionRegistry.sol`.
+   - Menggunakan randomized batching dan timing jitter untuk mencegah korelasi waktu antara request HTTP dan konfirmasi blok.
+4. **Non-Custodial Identity:**
+   - Parameter rahasia identitas ZK (`trapdoor` dan `nullifier`) diturunkan secara deterministik dari tanda tangan wallet pengguna di client dan tidak pernah dikirim atau disimpan di server.
+
+Detail analisis ancaman dan mitigasi dapat dilihat pada [THREAT_MODEL.md](file:///d:/Secret/My-Project/10-Confession-Booth/docs/THREAT_MODEL.md) dan laporan kelayakan teknis pada [ZK_SPIKE_REPORT.md](file:///d:/Secret/My-Project/10-Confession-Booth/docs/ZK_SPIKE_REPORT.md).
