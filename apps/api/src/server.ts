@@ -125,6 +125,7 @@ function isPublicIdFormat(v: string, prefix: 'c' | 'w' | 'any' = 'any'): boolean
 const feedQuery = z.object({
   sort: z.enum(['new', 'trending', 'relatable']).default('new'),
   category: z.string().min(1).max(64).optional(),
+  room: z.string().min(1).max(64).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().min(1).max(512).optional(),
   q: z.string().min(1).max(200).optional(),
@@ -369,6 +370,52 @@ export async function buildApp(): Promise<FastifyInstance> {
     return { ok: true };
   });
 
+  // --- T3-002: Anonymous Badges & Reputation helper ---
+  async function checkAndAwardBadge(db: Db, userId: string, badgeType: string): Promise<boolean> {
+    try {
+      const existing = rowsOf<{ id: string }>(
+        await db.execute(
+          sql`SELECT id FROM user_badges WHERE user_id = ${userId}::uuid AND badge_type = ${badgeType} LIMIT 1`,
+        ),
+      );
+      if (existing.length > 0) return false;
+
+      let eligible = false;
+      if (badgeType === 'EMPATHETIC_LISTENER') {
+        const cnt = rowsOf<{ n: string }>(
+          await db.execute(
+            sql`SELECT count(*) AS n FROM reactions WHERE user_id = ${userId}::uuid AND reaction_type IN ('UNDERSTAND', 'LOVE')`,
+          ),
+        );
+        eligible = Number(cnt[0]?.n ?? 0) >= 3;
+      } else if (badgeType === 'MIDNIGHT_SOUL') {
+        const nowH = new Date().getUTCHours() + 7; // WIB (UTC+7)
+        const h = nowH % 24;
+        eligible = h >= 0 && h < 4;
+      } else if (badgeType === 'CHAIN_WEAVER') {
+        const cnt = rowsOf<{ n: string }>(
+          await db.execute(
+            sql`SELECT count(*) AS n FROM whispers WHERE author_user_id = ${userId}::uuid`,
+          ),
+        );
+        eligible = Number(cnt[0]?.n ?? 0) >= 2;
+      } else if (badgeType === 'STEALTH_CONFESSOR') {
+        eligible = true;
+      }
+
+      if (eligible) {
+        await db.execute(
+          sql`INSERT INTO user_badges (user_id, badge_type) VALUES (${userId}::uuid, ${badgeType}) ON CONFLICT (user_id, badge_type) DO NOTHING`,
+        );
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('[checkAndAwardBadge error]', err);
+      return false;
+    }
+  }
+
   // --- Feed + detail (T1-011): hanya VISIBLE, proyeksi publik SCHEMA §17. ---
   async function reactionMap(db: Db, ids: string[]): Promise<Map<string, Record<string, number>>> {
     const map = new Map<string, Record<string, number>>();
@@ -411,10 +458,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (!parsed.success) {
       return reply.code(400).send({ error: { code: 'INVALID_QUERY', message: 'Invalid query.' } });
     }
-    const { sort, category, limit, cursor, q, slot } = parsed.data;
+    const { sort, category, room, limit, cursor, q, slot } = parsed.data;
     const db = getDb();
     const conds: ReturnType<typeof sql>[] = [sql`c.status = 'VISIBLE'`];
     if (category) conds.push(sql`cat.slug = ${category}`);
+    if (room) conds.push(sql`r.slug = ${room}`);
     if (slot === 'midnight') {
       conds.push(
         sql`(cat.slug = 'midnight' OR EXTRACT(HOUR FROM c.created_at AT TIME ZONE 'Asia/Jakarta') BETWEEN 0 AND 4)`,
@@ -447,17 +495,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     const where = sql.join(conds, sql` AND `);
 
     // T1-030: cache memori 60s per kombinasi query (T1H-002: Redis bila REDIS_URL di-set).
-    const cacheKey = `feed:${sort}:${category ?? ''}:${limit}:${cursor ?? ''}:${q ?? ''}:${slot}`;
+    const cacheKey = `feed:${sort}:${category ?? ''}:${room ?? ''}:${limit}:${cursor ?? ''}:${q ?? ''}:${slot}`;
     const cached = await feedCacheGet(cacheKey);
     if (cached) return cached as object;
 
     const rows = rowsOf<ConfessionRow & { id: string }>(
       await db.execute(sql`
         SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category,
-               c.proof_type,
+               c.proof_type, r.slug AS room_slug, c.badge_type,
                ${ftsRank} AS rank
         FROM confessions c
         JOIN categories cat ON cat.id = c.category_id
+        LEFT JOIN rooms r ON r.id = c.room_id
         LEFT JOIN feed_scores fs ON fs.confession_id = c.id AND fs.score_type = ${sort}
         WHERE ${where}
         ORDER BY rank DESC, fs.score DESC NULLS LAST, c.created_at DESC, c.public_id DESC
@@ -483,8 +532,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   async function findConfession(db: Db, publicId: string) {
     const rows = rowsOf<ConfessionRow & { id: string }>(
       await db.execute(sql`
-        SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category, c.proof_type
-        FROM confessions c JOIN categories cat ON cat.id = c.category_id
+        SELECT c.id, c.public_id, c.body_text, c.display_seed, c.status, c.created_at, cat.slug AS category,
+               c.proof_type, r.slug AS room_slug, c.badge_type
+        FROM confessions c
+        JOIN categories cat ON cat.id = c.category_id
+        LEFT JOIN rooms r ON r.id = c.room_id
         WHERE c.public_id = ${publicId} LIMIT 1
       `),
     );
@@ -604,6 +656,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   const confessBody = z.object({
     category: z.string().min(1).max(64),
     content: z.string().min(1).max(2000),
+    roomSlug: z.string().min(1).max(64).optional(),
+    badgeType: z.string().min(1).max(64).optional(),
     zkProof: z
       .object({
         merkleRoot: z.string().min(16),
@@ -624,7 +678,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         .code(400)
         .send({ error: { code: 'INVALID_CONTENT', message: 'Invalid payload.' } });
     }
-    const { category, content } = parsed.data;
+    const { category, content, roomSlug, badgeType } = parsed.data;
     if (!isCategory(category)) {
       return reply
         .code(400)
@@ -646,6 +700,21 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply
         .code(400)
         .send({ error: { code: 'INVALID_CATEGORY', message: 'Unknown category.' } });
+    }
+
+    let roomId: string | null = null;
+    if (roomSlug) {
+      const roomRows = rowsOf<{ id: string }>(
+        await db.execute(
+          sql`SELECT id FROM rooms WHERE slug = ${roomSlug} AND is_active = true LIMIT 1`,
+        ),
+      );
+      if (roomRows.length === 0) {
+        return reply
+          .code(404)
+          .send({ error: { code: 'ROOM_NOT_FOUND', message: 'Room not found.' } });
+      }
+      roomId = roomRows[0].id;
     }
 
     const contentHash = canonicalHash(content);
@@ -802,6 +871,7 @@ export async function buildApp(): Promise<FastifyInstance> {
             publicId,
             authorUserId: userId,
             categoryId: cats[0].id,
+            roomId,
             contentObjectId: coId,
             bodyText: content,
             displaySeed: seed,
@@ -810,6 +880,7 @@ export async function buildApp(): Promise<FastifyInstance> {
             moderationScore: String(verdict.score),
             nullifierHash,
             proofType,
+            badgeType: badgeType ?? null,
           })
           .returning({ id: schema.confessions.id });
         await tx.insert(schema.publications).values({
@@ -824,6 +895,13 @@ export async function buildApp(): Promise<FastifyInstance> {
         return conf[0].id;
       });
       void created;
+
+      if (userId) {
+        await checkAndAwardBadge(db, userId, 'MIDNIGHT_SOUL');
+        if (proofType === 'ZK') await checkAndAwardBadge(db, userId, 'STEALTH_CONFESSOR');
+      }
+      feedCacheInvalidate();
+
       return {
         statusCode: 201,
         body: {
@@ -832,6 +910,8 @@ export async function buildApp(): Promise<FastifyInstance> {
           publicId,
           author: { displayName: displayName(seed) },
           proofType,
+          roomSlug,
+          badgeType,
         },
       };
     };
@@ -883,6 +963,9 @@ export async function buildApp(): Promise<FastifyInstance> {
           ],
         })
         .returning({ id: schema.reactions.id });
+      if (ins.length > 0) {
+        await checkAndAwardBadge(db, req.user!.id, 'EMPATHETIC_LISTENER');
+      }
       return { statusCode: 200, body: { ok: true, reacted: ins.length > 0 } };
     };
     const idemKey = req.headers['idempotency-key'];
@@ -959,9 +1042,17 @@ export async function buildApp(): Promise<FastifyInstance> {
       body_text: string;
       display_seed: number;
       created_at: Date;
+      badge_type: string | null;
+      parent_whisper_public_id: string | null;
+      is_op: boolean;
     }>(
       await db.execute(sql`
-        SELECT w.public_id, w.body_text, w.display_seed, w.created_at FROM whispers w
+        SELECT w.public_id, w.body_text, w.display_seed, w.created_at, w.badge_type,
+               pw.public_id AS parent_whisper_public_id,
+               (w.author_user_id IS NOT NULL AND c.author_user_id IS NOT NULL AND w.author_user_id = c.author_user_id) AS is_op
+        FROM whispers w
+        JOIN confessions c ON c.id = w.confession_id
+        LEFT JOIN whispers pw ON pw.id = w.parent_whisper_id
         WHERE ${sql.join(conds, sql` AND `)}
         ORDER BY w.created_at ASC, w.public_id ASC LIMIT ${parsed.data.limit + 1}
       `),
@@ -971,9 +1062,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     return {
       items: page.map((w) => ({
         id: w.public_id,
+        parentWhisperId: w.parent_whisper_public_id ?? null,
         author: { displayName: displayName(w.display_seed) },
         content: w.body_text,
         createdAt: new Date(w.created_at).toISOString(),
+        isOp: Boolean(w.is_op),
+        badgeType: w.badge_type ?? null,
       })),
       nextCursor:
         rows.length > parsed.data.limit && last
@@ -982,7 +1076,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     };
   });
 
-  const whisperBody = z.object({ content: z.string().min(1).max(2000) });
+  const whisperBody = z.object({
+    content: z.string().min(1).max(2000),
+    parentWhisperId: z.string().min(3).max(64).optional(),
+    badgeType: z.string().min(1).max(64).optional(),
+  });
 
   app.post('/api/confessions/:publicId/whispers', async (req, reply) => {
     if (!requireAuth(req, reply)) return;
@@ -1009,6 +1107,29 @@ export async function buildApp(): Promise<FastifyInstance> {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
     }
     if (!(await rateLimitOr429(reply, `user:${userId}`, 'whisper'))) return;
+
+    let parentWhisperDbId: string | null = null;
+    const parentPublicId = parsed.data.parentWhisperId;
+    if (parentPublicId) {
+      const parentRows = rowsOf<{ id: string }>(
+        await db.execute(sql`
+          SELECT id FROM whispers
+          WHERE public_id = ${parentPublicId}
+            AND confession_id = ${found.id}::uuid
+            AND status = 'VISIBLE'
+          LIMIT 1
+        `),
+      );
+      if (parentRows.length === 0) {
+        return reply.code(404).send({
+          error: {
+            code: 'PARENT_NOT_FOUND',
+            message: 'Parent whisper not found in this confession.',
+          },
+        });
+      }
+      parentWhisperDbId = parentRows[0].id;
+    }
 
     const contentHash = canonicalHash(parsed.data.content);
     const dup = rowsOf<{ one: number }>(
@@ -1049,15 +1170,28 @@ export async function buildApp(): Promise<FastifyInstance> {
         await tx.insert(schema.whispers).values({
           publicId: wid,
           confessionId: found.id,
+          parentWhisperId: parentWhisperDbId,
           authorUserId: userId,
           contentObjectId: coId,
           bodyText: parsed.data.content,
           displaySeed: seed,
           status: 'VISIBLE',
           publishedAt: new Date(),
+          badgeType: parsed.data.badgeType ?? null,
         });
       });
-      return { statusCode: 201, body: { id: wid, status: 'visible' } };
+
+      await checkAndAwardBadge(db, userId, 'CHAIN_WEAVER');
+
+      return {
+        statusCode: 201,
+        body: {
+          id: wid,
+          status: 'visible',
+          parentWhisperId: parentPublicId ?? null,
+          badgeType: parsed.data.badgeType ?? null,
+        },
+      };
     };
     const idemKey = req.headers['idempotency-key'];
     if (typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128) {
@@ -1066,6 +1200,94 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
     const r = await create();
     return reply.code(r.statusCode).send(r.body);
+  });
+
+  // --- T3-002: Badges & Reputation API ---
+  app.get('/api/me/badges', async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const db = getDb();
+    const rows = rowsOf<{ badge_type: string; awarded_at: Date }>(
+      await db.execute(
+        sql`SELECT badge_type, awarded_at FROM user_badges WHERE user_id = ${req.user!.id}::uuid ORDER BY awarded_at ASC`,
+      ),
+    );
+    return {
+      badges: rows.map((r) => ({
+        type: r.badge_type,
+        awardedAt: new Date(r.awarded_at).toISOString(),
+      })),
+    };
+  });
+
+  // --- T3-003: Community Rooms API ---
+  app.get('/api/rooms', async (_req, _reply) => {
+    const db = getDb();
+    const rows = rowsOf<{
+      slug: string;
+      name: string;
+      description: string;
+      icon: string;
+      rules: string | null;
+      sort_order: number;
+      confession_count: string;
+    }>(
+      await db.execute(sql`
+        SELECT r.slug, r.name, r.description, r.icon, r.rules, r.sort_order,
+               count(c.id) AS confession_count
+        FROM rooms r
+        LEFT JOIN confessions c ON c.room_id = r.id AND c.status = 'VISIBLE'
+        WHERE r.is_active = true
+        GROUP BY r.id
+        ORDER BY r.sort_order ASC, r.name ASC
+      `),
+    );
+    return {
+      rooms: rows.map((r) => ({
+        slug: r.slug,
+        name: r.name,
+        description: r.description,
+        icon: r.icon,
+        rules: r.rules,
+        confessionCount: Number(r.confession_count ?? 0),
+      })),
+    };
+  });
+
+  app.get('/api/rooms/:slug', async (req, reply) => {
+    const { slug } = req.params as { slug: string };
+    const db = getDb();
+    const rows = rowsOf<{
+      slug: string;
+      name: string;
+      description: string;
+      icon: string;
+      rules: string | null;
+      confession_count: string;
+    }>(
+      await db.execute(sql`
+        SELECT r.slug, r.name, r.description, r.icon, r.rules,
+               count(c.id) AS confession_count
+        FROM rooms r
+        LEFT JOIN confessions c ON c.room_id = r.id AND c.status = 'VISIBLE'
+        WHERE r.slug = ${slug} AND r.is_active = true
+        GROUP BY r.id
+        LIMIT 1
+      `),
+    );
+    if (rows.length === 0) {
+      return reply
+        .code(404)
+        .send({ error: { code: 'ROOM_NOT_FOUND', message: 'Room not found.' } });
+    }
+    const r = rows[0];
+    return {
+      slug: r.slug,
+      name: r.name,
+      description: r.description,
+      icon: r.icon,
+      rules: r.rules,
+      confessionCount: Number(r.confession_count ?? 0),
+    };
   });
 
   // --- Reports (T1-014): pelapor boleh anonim. T1-024/027: details max 500 via shared, throttle per-target. ---

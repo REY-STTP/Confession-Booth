@@ -14,7 +14,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
   return (
     <article className="booth-card p-5" aria-label={`Confession ${item.author.displayName}`}>
       <div className="flex items-center justify-between text-xs text-booth-dim">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-booth-ink">{item.author.displayName}</span>
           {item.proofType === 'ZK' ? (
             <span
@@ -24,13 +24,27 @@ export function BoothCard({ item }: { item: FeedItem }) {
               🛡️ ZK
             </span>
           ) : null}
+          {item.badgeType ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300 font-medium"
+              title={`Badge: ${item.badgeType}`}
+            >
+              🏅 {item.badgeType.replace(/_/g, ' ')}
+            </span>
+          ) : null}
         </div>
-        <span>
-          <span className="mr-2 rounded-full border border-booth-line px-2 py-0.5">
-            {item.category}
-          </span>
-          {timeAgo(item.createdAt)}
-        </span>
+        <div className="flex items-center gap-2 text-booth-dim">
+          {item.roomSlug ? (
+            <a
+              href={`/rooms/${item.roomSlug}`}
+              className="rounded-full border border-booth-line/80 bg-booth-line/20 px-2 py-0.5 text-[11px] text-booth-accent hover:border-booth-accent transition-colors"
+            >
+              #{item.roomSlug}
+            </a>
+          ) : null}
+          <span className="rounded-full border border-booth-line px-2 py-0.5">{item.category}</span>
+          <span>{timeAgo(item.createdAt)}</span>
+        </div>
       </div>
       {/* Render sebagai teks biasa — React escape otomatis (defense-in-depth, T1-004). */}
       <p className="mt-3 whitespace-pre-wrap leading-relaxed">{item.content}</p>

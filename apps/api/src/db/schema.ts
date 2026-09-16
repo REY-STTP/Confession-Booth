@@ -8,6 +8,7 @@
 //  4. idempotency_keys — tabel tambahan untuk Idempotency-Key 24 jam (API.md §12).
 
 import {
+  type AnyPgColumn,
   pgTable,
   pgEnum,
   uuid,
@@ -108,6 +109,23 @@ export const categories = pgTable('categories', {
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
+// Fase 3: Community Rooms (T3-003)
+export const rooms = pgTable(
+  'rooms',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: varchar('slug', { length: 64 }).notNull().unique(),
+    name: varchar('name', { length: 128 }).notNull(),
+    description: text('description').notNull(),
+    icon: varchar('icon', { length: 32 }).notNull().default('💬'),
+    rules: text('rules'),
+    isActive: boolean('is_active').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_rooms_slug').on(t.slug)],
+);
+
 export const contentObjects = pgTable('content_objects', {
   id: uuid('id').primaryKey().defaultRandom(),
   contentHash: varchar('content_hash', { length: 128 }).notNull().unique(),
@@ -127,6 +145,7 @@ export const confessions = pgTable(
     categoryId: uuid('category_id')
       .notNull()
       .references(() => categories.id),
+    roomId: uuid('room_id').references(() => rooms.id, { onDelete: 'set null' }),
     contentObjectId: uuid('content_object_id')
       .notNull()
       .references(() => contentObjects.id),
@@ -140,10 +159,12 @@ export const confessions = pgTable(
     moderationScore: numeric('moderation_score', { precision: 5, scale: 2 }).notNull().default('0'),
     nullifierHash: varchar('nullifier_hash', { length: 128 }),
     proofType: varchar('proof_type', { length: 32 }).notNull().default('SESSION'),
+    badgeType: varchar('badge_type', { length: 64 }),
   },
   (t) => [
     index('idx_confessions_feed').on(t.status, t.createdAt),
     index('idx_confessions_category').on(t.categoryId, t.status, t.createdAt),
+    index('idx_confessions_room').on(t.roomId, t.status, t.createdAt),
     index('idx_confessions_nullifier').on(t.nullifierHash),
   ],
 );
@@ -175,6 +196,9 @@ export const whispers = pgTable(
     confessionId: uuid('confession_id')
       .notNull()
       .references(() => confessions.id, { onDelete: 'cascade' }),
+    parentWhisperId: uuid('parent_whisper_id').references((): AnyPgColumn => whispers.id, {
+      onDelete: 'cascade',
+    }),
     authorUserId: uuid('author_user_id')
       .notNull()
       .references(() => users.id),
@@ -186,8 +210,12 @@ export const whispers = pgTable(
     status: confessionStatus('status').notNull().default('VISIBLE'),
     createdAt: ts('created_at').notNull().defaultNow(),
     publishedAt: ts('published_at'),
+    badgeType: varchar('badge_type', { length: 64 }),
   },
-  (t) => [index('idx_whispers_confession').on(t.confessionId, t.createdAt)],
+  (t) => [
+    index('idx_whispers_confession').on(t.confessionId, t.createdAt),
+    index('idx_whispers_parent').on(t.parentWhisperId),
+  ],
 );
 
 export const reports = pgTable(
@@ -322,5 +350,22 @@ export const epochNullifiers = pgTable(
   (t) => [
     uniqueIndex('uq_epoch_nullifier').on(t.nullifierHash, t.epoch, t.scope),
     index('idx_epoch_nullifiers_lookup').on(t.nullifierHash, t.epoch, t.scope),
+  ],
+);
+
+// Fase 3: Anonymous Badges & Reputation (T3-002)
+export const userBadges = pgTable(
+  'user_badges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    badgeType: varchar('badge_type', { length: 64 }).notNull(),
+    awardedAt: ts('awarded_at').notNull().defaultNow(),
+  },
+  (t) => [
+    unique('uq_user_badge').on(t.userId, t.badgeType),
+    index('idx_user_badges_user').on(t.userId),
   ],
 );

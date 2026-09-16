@@ -407,9 +407,32 @@ shared 18/18, API 61/61, E2E 5/5, `npm audit --omit=dev` 0).
 - [x] **T2-004** ZK spike: kelayakan + biaya + UX; update threat model + PRIVACY.md [Semaphore v4 Groth16 terpilih; benchmark <2s mobile; THREAT_MODEL.md & ZK_SPIKE_REPORT.md dibuat; PRIVACY.md updated ✅ 2026-09-16]
 - [x] Syarat: tidak boleh merusak verifiability + moderasi audit [Semua verifiability on-chain terjaga via content_hash sha256 + moderasi audit tetap aktif via flag/moderation queue ✅ 2026-09-16]
 
-## Fase 3 — Community (Backlog)
+## Fase 3 — Community (SELESAI ✅ 2026-09-16)
 
-- [ ] **T3-001** Confession Chains (thread anonim), **T3-002** badge/reputasi anonim non-spekulatif, **T3-003** community rooms (tanpa follow graph publik).
+- [x] **T3-001** Confession Chains (thread anonim berantai)
+  - Hierarki berantai: `whispers.parent_whisper_id` self-referential foreign key (migrasi 0007).
+  - Validasi ketat parent whisper: tolak manipulasi lintas confession atau parent tidak ditemukan (404).
+  - Tagging `isOp`: komputasi server-side `w.author_user_id = c.author_user_id` tanpa pernah mengekspos user ID atau wallet.
+  - UI Web: render thread pohon/nesting berantai di `/confessions/[publicId]` dengan tombol balas, visual connector, dan badge OP terverifikasi.
+  - Test suite: `community.test.ts` subtest 2 (PASS).
+
+- [x] **T3-002** Badges / Reputasi Anonim Non-Spekulatif (Soulbound Badges)
+  - Skema: tabel `user_badges` (user_id, badge_type, awarded_at) unik per user & tipe badge. Non-transferable, zero tokenization / financialization.
+  - 4 Lencana reputasi:
+    - 🌿 `EMPATHETIC_LISTENER`: diperoleh otomatis saat memberikan >=3 reaksi empati (`UNDERSTAND`/`LOVE`).
+    - 🌒 `MIDNIGHT_SOUL`: diperoleh otomatis saat mempublikasikan confession di jam sunyi (00:00 - 04:00 WIB).
+    - 🧵 `CHAIN_WEAVER`: diperoleh otomatis saat aktif merespons balasan berantai (>=2 whispers).
+    - 🛡️ `STEALTH_CONFESSOR`: diperoleh otomatis saat mempublikasikan confession via ZK Stealth Mode.
+  - Endpoint: `GET /api/me/badges` untuk listing lencana privat user.
+  - UI Web: showcase lencana di `/rooms`, opsi memilih/memasang lencana saat posting di `/compose` dan form whisper.
+  - Test suite: `community.test.ts` subtest 3 (PASS).
+
+- [x] **T3-003** Community Rooms (Tanpa Follow Graph Publik)
+  - Skema: tabel `rooms` dengan 5 room default (`campus-life`, `workplace-burnout`, `unsent-letters`, `deep-existential`, `midnight-thoughts`), kolom `confessions.room_id`.
+  - API: `GET /api/rooms` (daftar room + statistik confession count), `GET /api/rooms/:slug` (detail + pedoman khusus), filter feed `GET /api/feed?room=:slug`, posting `POST /api/confessions` dengan `roomSlug`.
+  - UI Web: direktori katalog `/rooms`, feed bertema khusus `/rooms/[slug]`, navigasi bar link `Rooms`, dan dropdown room selector di `/compose`.
+  - Zero Follow Graph: tidak ada personal follower/following counts, follow graphs, atau feed user publik. Privasi terjaga penuh.
+  - Test suite: `community.test.ts` subtest 1 (PASS).
 
 ## Fase 4 — Desentralisasi (Eksperimen)
 

@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { countChars, API_URL } from '@/lib/booth';
+import {
+  countChars,
+  API_URL,
+  getRooms,
+  getMyBadges,
+  BADGE_META,
+  type RoomItem,
+  type UserBadgeItem,
+} from '@/lib/booth';
 import { useSession, apiFetch } from '@/lib/session';
 import {
   deriveAnonymousIdentityBrowser,
@@ -30,12 +38,32 @@ export function ComposerForm() {
   const { accessToken, state, getOrRequestSignature } = useSession();
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('sad');
+  const [rooms, setRooms] = useState<RoomItem[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState('');
+  const [badges, setBadges] = useState<UserBadgeItem[]>([]);
+  const [selectedBadge, setSelectedBadge] = useState('');
   const [privacyMode, setPrivacyMode] = useState<'standard' | 'zk'>('standard');
   const [zkStep, setZkStep] = useState('');
   const [status, setStatus] = useState<'idle' | 'pending' | 'visible' | 'error'>('idle');
   const [error, setError] = useState('');
   const [publicId, setPublicId] = useState('');
   const [publishedProofType, setPublishedProofType] = useState('SESSION');
+
+  useEffect(() => {
+    getRooms()
+      .then(setRooms)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (accessToken) {
+      getMyBadges(accessToken)
+        .then(setBadges)
+        .catch(() => {});
+    } else {
+      setBadges([]);
+    }
+  }, [accessToken]);
 
   const n = countChars(content);
   const markup = /<[a-zA-Z/!]/.test(content);
@@ -88,7 +116,12 @@ export function ComposerForm() {
     return apiFetch('/api/confessions', accessToken, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ category, content }),
+      body: JSON.stringify({
+        category,
+        content,
+        roomSlug: selectedRoom || undefined,
+        badgeType: selectedBadge || undefined,
+      }),
     });
   }
 
@@ -164,7 +197,13 @@ export function ComposerForm() {
             'Content-Type': 'application/json',
             'Idempotency-Key': idemKey,
           },
-          body: JSON.stringify({ category, content, zkProof }),
+          body: JSON.stringify({
+            category,
+            content,
+            roomSlug: selectedRoom || undefined,
+            badgeType: selectedBadge || undefined,
+            zkProof,
+          }),
         });
       } else {
         res = await postConfession(idemKey);
@@ -256,20 +295,86 @@ export function ComposerForm() {
         ) : null}
       </div>
 
-      <label className="block text-sm">
-        <span className="mb-1 block text-booth-dim">Kategori (pilih satu)</span>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="w-full rounded-lg border border-booth-line bg-booth-bg p-2.5"
-        >
-          {CATS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label className="block text-sm">
+          <span className="mb-1 block text-booth-dim">Kategori Emosi</span>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full rounded-lg border border-booth-line bg-booth-bg p-2.5 text-sm"
+          >
+            {CATS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block text-sm">
+          <span className="mb-1 block text-booth-dim">Community Room (Opsional)</span>
+          <select
+            value={selectedRoom}
+            onChange={(e) => setSelectedRoom(e.target.value)}
+            className="w-full rounded-lg border border-booth-line bg-booth-bg p-2.5 text-sm"
+          >
+            <option value="">Beranda Umum (Tanpa Room)</option>
+            {rooms.map((r) => (
+              <option key={r.slug} value={r.slug}>
+                {r.icon} {r.name} (#{r.slug})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {badges.length > 0 ? (
+        <div className="rounded-lg border border-booth-line/60 bg-booth-panel p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-booth-ink flex items-center gap-1.5">
+              🏅 Pasang Lencana Reputasi Anonim (Opsional)
+            </span>
+            <span className="text-[11px] text-booth-dim">{badges.length} lencana dimiliki</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedBadge('')}
+              className={`rounded-full px-2.5 py-1 text-xs border transition ${
+                !selectedBadge
+                  ? 'border-booth-accent bg-booth-accent/20 text-booth-ink font-medium'
+                  : 'border-booth-line text-booth-dim hover:text-booth-ink'
+              }`}
+            >
+              Tanpa Lencana
+            </button>
+            {badges.map((b) => {
+              const meta = BADGE_META[b.type] ?? {
+                label: b.type,
+                icon: '🏅',
+                color: 'border-booth-line text-booth-ink',
+              };
+              const isSelected = selectedBadge === b.type;
+              return (
+                <button
+                  key={b.type}
+                  type="button"
+                  onClick={() => setSelectedBadge(isSelected ? '' : b.type)}
+                  className={`rounded-full px-2.5 py-1 text-xs border transition flex items-center gap-1 ${
+                    isSelected
+                      ? `${meta.color} font-semibold ring-1 ring-current`
+                      : 'border-booth-line text-booth-dim hover:text-booth-ink'
+                  }`}
+                  title={meta.desc}
+                >
+                  <span>{meta.icon}</span>
+                  <span>{meta.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       <label className="block text-sm">
         <span className="sr-only">Confession</span>
         <textarea

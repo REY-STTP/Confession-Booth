@@ -33,6 +33,7 @@ export function canonicalHash(body: string): string {
 
 export interface PublicConfession {
   id: string;
+  publicId: string;
   author: { displayName: string };
   category: string;
   content: string;
@@ -41,6 +42,8 @@ export interface PublicConfession {
   whisperCount: number;
   status: string;
   proofType?: string;
+  roomSlug?: string;
+  badgeType?: string;
 }
 
 export interface ConfessionRow {
@@ -51,6 +54,8 @@ export interface ConfessionRow {
   created_at: Date;
   category: string;
   proof_type?: string | null;
+  room_slug?: string | null;
+  badge_type?: string | null;
 }
 
 export function projectConfession(
@@ -60,6 +65,7 @@ export function projectConfession(
 ): PublicConfession {
   return {
     id: row.public_id,
+    publicId: row.public_id,
     author: { displayName: displayName(row.display_seed) },
     category: row.category,
     content: row.body_text,
@@ -74,6 +80,8 @@ export function projectConfession(
     whisperCount,
     status: row.status.toLowerCase(),
     proofType: row.proof_type ?? 'SESSION',
+    roomSlug: row.room_slug ?? undefined,
+    badgeType: row.badge_type ?? undefined,
   };
 }
 
