@@ -205,7 +205,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
         ? row.contract_address
         : config.contractAddress && !config.contractAddress.startsWith('0x0000')
           ? config.contractAddress
-          : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0';
+          : '0xa8302048773DD213B9D311c2abda199B14339188';
     // P0 #5: verifier off-chain assert — klaim CONFIRMED hanya valid bila kontrak
     // dan chainId sesuai konfigurasi yang diharapkan (anti replay lintas-chain/fork).
     const verified =
@@ -467,7 +467,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
             contractAddress:
               config.contractAddress && !config.contractAddress.startsWith('0x0000')
                 ? config.contractAddress
-                : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0',
+                : '0xa8302048773DD213B9D311c2abda199B14339188',
             onchainConfessionId: onchainId(publicId),
             contentHash,
             status: 'PENDING_CHAIN',

@@ -120,7 +120,7 @@ Key environment variables:
 | `NEXT_PUBLIC_APP_URL`          | Frontend URL                                           | `http://localhost:3000`                       |
 | `NEXT_PUBLIC_API_URL`          | Backend Fastify API URL                                | `http://localhost:4000`                       |
 | `NEXT_PUBLIC_CHAIN_ID`         | Ethereum Chain ID (Sepolia)                            | `11155111`                                    |
-| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Sepolia ConfessionRegistry Address                     | `0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0`  |
+| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Sepolia ConfessionRegistry Address                     | `0xa8302048773DD213B9D311c2abda199B14339188`  |
 | `SESSION_SECRET`               | 32+ character random string for JWT / sessions         | `change-me-min-32-chars-in-production`        |
 | `ADMIN_SECRET`                 | Secret token for administrative health & metric routes | `change-me-admin-only`                        |
 | `POW_DIFFICULTY`               | Client-side Proof-of-Work difficulty bits (anti-spam)  | `14`                                          |

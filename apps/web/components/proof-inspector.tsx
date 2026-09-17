@@ -259,7 +259,7 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                   const contractAddr =
                     proof.contractAddress && !proof.contractAddress.startsWith('0x0000')
                       ? proof.contractAddress
-                      : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0';
+                      : '0xa8302048773DD213B9D311c2abda199B14339188';
                   return (
                     <div className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3">
                       <div className="flex items-center justify-between">

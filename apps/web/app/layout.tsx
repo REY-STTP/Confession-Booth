@@ -84,7 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
               <span className="text-border">•</span>
               <a
-                href="https://sepolia.etherscan.io/address/0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0"
+                href="https://sepolia.etherscan.io/address/0xa8302048773DD213B9D311c2abda199B14339188"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
