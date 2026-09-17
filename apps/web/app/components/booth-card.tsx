@@ -72,13 +72,14 @@ export function BoothCard({ item }: { item: FeedItem }) {
                 <TooltipTrigger asChild>
                   <Badge variant="zk" className="cursor-help gap-1 h-5 px-2 py-0 text-[10px]">
                     <ShieldCheck className="h-3 w-3 text-emerald-400" aria-hidden="true" />
-                    <span>ZK</span>
+                    <span>Anon</span>
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
-                  <p className="font-semibold text-emerald-400">Zero-Knowledge Stealth</p>
+                  <p className="font-semibold text-emerald-400">Anonymous (Unverified)</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Cryptographically verified on-chain without linking to source wallet.
+                    Posted without session or wallet linkage. Full zero-knowledge verification is
+                    not yet enforced.
                   </p>
                 </TooltipContent>
               </Tooltip>

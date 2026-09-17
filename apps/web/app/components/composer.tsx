@@ -324,8 +324,8 @@ export function ComposerForm() {
             <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
               {publishedProofType === 'ZK' ? (
                 <>
-                  Your confession is protected by <strong>Zero-Knowledge Anonymous Stealth</strong>.
-                  No wallet address or session data is linked in the database or blockchain.
+                  Your confession was published <strong>without session or wallet linkage</strong>.
+                  Anonymous proof verification is in preview and not yet fully enforced.
                 </>
               ) : (
                 <>
@@ -442,8 +442,8 @@ export function ComposerForm() {
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Zero-Knowledge cryptography. Unlinkable — zero wallet trace in database or
-                  blockchain.
+                  Anonymous posting without session tokens — no wallet trace in the database. Proof
+                  verification is in preview until full zero-knowledge lands.
                 </p>
               </button>
             </div>
@@ -452,9 +452,10 @@ export function ComposerForm() {
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/30 p-2.5 text-[11px] text-emerald-300 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 flex-shrink-0 mt-0.5 text-emerald-400" />
                 <p className="leading-relaxed">
-                  <strong>Zero-Knowledge Stealth:</strong> Membership proof is generated locally in
-                  your browser via Merkle Tree &amp; Nullifier. Request is sent{' '}
-                  <em>without session tokens</em> for absolute mathematical privacy.
+                  <strong>Anonymous (Unverified Preview):</strong> Membership proof is generated
+                  locally in your browser via Merkle Tree &amp; Nullifier. Request is sent{' '}
+                  <em>without session tokens</em>. Full cryptographic verification is not yet
+                  enforced.
                 </p>
               </div>
             ) : null}

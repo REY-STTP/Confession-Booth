@@ -121,7 +121,7 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                 variant={isZk ? 'zk' : 'secondary'}
                 className="text-[10px] py-0 px-2 h-5 font-mono"
               >
-                {isZk ? 'ZK Stealth Proof' : 'EIP-712 Session'}
+                {isZk ? 'Anonymous (Unverified)' : 'EIP-712 Session'}
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground hidden sm:block">

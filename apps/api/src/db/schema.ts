@@ -322,6 +322,30 @@ export const idempotencyKeys = pgTable(
   (t) => [unique('uq_idempotency').on(t.key, t.userId)],
 );
 
+// P0 hardening (REPORTS.md P0 #3/#4): PoW single-use + admin bootstrap audit.
+export const powSolutions = pgTable(
+  'pow_solutions',
+  {
+    solutionHash: varchar('solution_hash', { length: 128 }).primaryKey(),
+    expiresAt: ts('expires_at').notNull(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_pow_solutions_expiry').on(t.expiresAt)],
+);
+
+export const adminAudit = pgTable(
+  'admin_audit',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    action: varchar('action', { length: 32 }).notNull(),
+    walletAddress: varchar('wallet_address', { length: 42 }).notNull(),
+    role: varchar('role', { length: 16 }),
+    ipHash: varchar('ip_hash', { length: 128 }),
+    createdAt: ts('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('idx_admin_audit_wallet').on(t.walletAddress)],
+);
+
 export const indexerState = pgTable('indexer_state', {
   name: varchar('name', { length: 64 }).primaryKey(),
   lastBlock: bigint('last_block', { mode: 'number' }).notNull(),

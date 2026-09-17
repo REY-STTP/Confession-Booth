@@ -25,17 +25,24 @@ before(async () => {
 
 let ipN = 100;
 const ip = () => `10.60.0.${(ipN++ % 200) + 1}`;
-const rnd = (p: string) => `${p} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+const rnd = (p: string) =>
+  `${p} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 async function newUser() {
   const acc = privateKeyToAccount(generatePrivateKey());
   const myIp = ip();
-  const nRes = await app.inject({ method: 'GET', url: `/api/auth/nonce?address=${acc.address}`, remoteAddress: myIp });
+  const nRes = await app.inject({
+    method: 'GET',
+    url: `/api/auth/nonce?address=${acc.address}`,
+    remoteAddress: myIp,
+  });
   assert.equal(nRes.statusCode, 200);
   const { nonce, message } = nRes.json();
   const sig = await acc.signMessage({ message });
   const vRes = await app.inject({
-    method: 'POST', url: '/api/auth/verify', remoteAddress: myIp,
+    method: 'POST',
+    url: '/api/auth/verify',
+    remoteAddress: myIp,
     payload: { address: acc.address, signature: sig, nonce },
   });
   assert.equal(vRes.statusCode, 200);
@@ -52,12 +59,16 @@ async function insertConfession(opts: {
   status?: string;
 }): Promise<{ id: string; publicId: string }> {
   const cat = (
-    (await db.execute(sql`SELECT id FROM categories WHERE slug = ${opts.category ?? 'love'} LIMIT 1`)) as unknown as {
+    (await db.execute(
+      sql`SELECT id FROM categories WHERE slug = ${opts.category ?? 'love'} LIMIT 1`,
+    )) as unknown as {
       rows: Array<{ id: string }>;
     }
   ).rows[0].id;
   let user = (
-    (await db.execute(sql`SELECT id FROM users WHERE wallet_address = ${opts.authorWallet.toLowerCase()} LIMIT 1`)) as unknown as {
+    (await db.execute(
+      sql`SELECT id FROM users WHERE wallet_address = ${opts.authorWallet.toLowerCase()} LIMIT 1`,
+    )) as unknown as {
       rows: Array<{ id: string }>;
     }
   ).rows[0];
@@ -68,7 +79,9 @@ async function insertConfession(opts: {
       )) as unknown as { rows: Array<{ id: string }> }
     ).rows[0];
   }
-  const hash = createHash('sha256').update(opts.body.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase(), 'utf8').digest('hex');
+  const hash = createHash('sha256')
+    .update(opts.body.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase(), 'utf8')
+    .digest('hex');
   const co = (
     (await db.execute(
       sql`INSERT INTO content_objects (content_hash) VALUES (${hash}) ON CONFLICT (content_hash) DO UPDATE SET content_hash = EXCLUDED.content_hash RETURNING id`,
@@ -90,9 +103,16 @@ describe('FTS Indonesia (T1H-004)', () => {
   it('kata khas ditemukan + ranking relevansi (3x > 1x)', async () => {
     const u = await newUser();
     const kw = `zqxwftp${Date.now().toString(36)}`;
-    await insertConfession({ authorWallet: u.acc.address, body: `${kw} mangga mangga mangga di pasar` });
+    await insertConfession({
+      authorWallet: u.acc.address,
+      body: `${kw} mangga mangga mangga di pasar`,
+    });
     await insertConfession({ authorWallet: u.acc.address, body: `${kw} mangga di kebun` });
-    const res = await app.inject({ method: 'GET', url: `/api/feed?q=${kw}%20mangga&limit=10`, remoteAddress: ip() });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/feed?q=${kw}%20mangga&limit=10`,
+      remoteAddress: ip(),
+    });
     assert.equal(res.statusCode, 200);
     const items = res.json().items as Array<{ content: string }>;
     assert.ok(items.length >= 2);
@@ -110,10 +130,29 @@ describe('slot midnight (T1H-003)', () => {
     if (night.getTime() > Date.now()) night.setUTCDate(night.getUTCDate() - 1);
     const noon = new Date(night.getTime());
     noon.setUTCHours(5, 0, 0, 0); // 12:00 WIB
-    const a = await insertConfession({ authorWallet: u.acc.address, category: 'sad', body: `${tag} begadang`, createdAt: night });
-    const b = await insertConfession({ authorWallet: u.acc.address, category: 'midnight', body: `${tag} tag`, createdAt: noon });
-    await insertConfession({ authorWallet: u.acc.address, category: 'sad', body: `${tag} siang bolong`, createdAt: noon });
-    const res = await app.inject({ method: 'GET', url: `/api/feed?slot=midnight&q=${encodeURIComponent(tag)}&limit=10`, remoteAddress: ip() });
+    const a = await insertConfession({
+      authorWallet: u.acc.address,
+      category: 'sad',
+      body: `${tag} begadang`,
+      createdAt: night,
+    });
+    const b = await insertConfession({
+      authorWallet: u.acc.address,
+      category: 'midnight',
+      body: `${tag} tag`,
+      createdAt: noon,
+    });
+    await insertConfession({
+      authorWallet: u.acc.address,
+      category: 'sad',
+      body: `${tag} siang bolong`,
+      createdAt: noon,
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/feed?slot=midnight&q=${encodeURIComponent(tag)}&limit=10`,
+      remoteAddress: ip(),
+    });
     assert.equal(res.statusCode, 200);
     const ids = (res.json().items as Array<{ id: string }>).map((i) => i.id);
     assert.ok(ids.includes(a.publicId), 'jam 02:30 WIB harus masuk slot midnight');
@@ -122,24 +161,35 @@ describe('slot midnight (T1H-003)', () => {
   });
 });
 
-describe('PoW eskalasi (T1H-005)', () => {
-  it('issue → solve → verify ok; palsu/kedaluwarsa ditolak', () => {
-    const ch = issuePowChallenge();
+describe('PoW eskalasi (T1H-005 + P0 #4 binding & single-use)', () => {
+  it('issue → solve → verify ok; palsu/reuse/lintas-subjek ditolak', async () => {
+    const subject = `pow-unit-${Date.now()}`;
+    const ch = issuePowChallenge(subject);
     assert.ok(ch.difficulty >= 8 && ch.token.includes('.'));
     const salt = ch.token.split('.')[0];
     const nonceN = solvePow(salt, ch.difficulty);
     assert.ok(nonceN !== null);
-    assert.equal(verifyPowSolution(`${ch.token}:${nonceN}`), true);
-    assert.equal(verifyPowSolution(`${ch.token}:999999999`), false);
-    assert.equal(verifyPowSolution('asal:0'), false);
-    assert.equal(verifyPowSolution(`${ch.token}:`), false);
+    assert.equal(await verifyPowSolution(db, `${ch.token}:${nonceN}`, subject), true);
+    // Single-use: solusi yang sama tidak bisa dipakai dua kali.
+    assert.equal(await verifyPowSolution(db, `${ch.token}:${nonceN}`, subject), false);
+    assert.equal(await verifyPowSolution(db, `${ch.token}:999999999`, subject), false);
+    assert.equal(await verifyPowSolution(db, 'asal:0', subject), false);
+    assert.equal(await verifyPowSolution(db, `${ch.token}:`, subject), false);
+    // Lintas subjek: solusi subjek lain ditolak walau komputasi valid.
+    const chB = issuePowChallenge(`${subject}-other`);
+    const nB = solvePow(chB.token.split('.')[0], chB.difficulty);
+    assert.ok(nB !== null);
+    assert.equal(await verifyPowSolution(db, `${chB.token}:${nB}`, subject), false);
+    assert.equal(await verifyPowSolution(db, `${chB.token}:${nB}`, `${subject}-other`), true);
   });
 
   it('akun bermasalah (4 report) → 429 POW_REQUIRED → solve → 201', async () => {
     const u = await newUser();
     const myIp = ip();
     const pub = await app.inject({
-      method: 'POST', url: '/api/confessions', remoteAddress: myIp,
+      method: 'POST',
+      url: '/api/confessions',
+      remoteAddress: myIp,
       headers: { authorization: `Bearer ${u.token}` },
       payload: { category: 'sad', content: rnd('pow target') },
     });
@@ -148,13 +198,17 @@ describe('PoW eskalasi (T1H-005)', () => {
     // 4 report non-kritis dari IP berbeda (hindari throttle dup per-target).
     for (const [i, reason] of ['SPAM', 'HARASSMENT', 'HATE', 'OTHER'].entries()) {
       const r = await app.inject({
-        method: 'POST', url: '/api/reports', remoteAddress: `10.61.${i}.${(ipN++ % 200) + 1}`,
+        method: 'POST',
+        url: '/api/reports',
+        remoteAddress: `10.61.${i}.${(ipN++ % 200) + 1}`,
         payload: { targetType: 'CONFESSION', targetId: target, reason },
       });
       assert.equal(r.statusCode, 201);
     }
     const blocked = await app.inject({
-      method: 'POST', url: '/api/confessions', remoteAddress: ip(),
+      method: 'POST',
+      url: '/api/confessions',
+      remoteAddress: ip(),
       headers: { authorization: `Bearer ${u.token}` },
       payload: { category: 'sad', content: rnd('pow coba') },
     });
@@ -164,7 +218,9 @@ describe('PoW eskalasi (T1H-005)', () => {
     const nonceN = solvePow(ch.token.split('.')[0], ch.difficulty);
     assert.ok(nonceN !== null);
     const retry = await app.inject({
-      method: 'POST', url: '/api/confessions', remoteAddress: ip(),
+      method: 'POST',
+      url: '/api/confessions',
+      remoteAddress: ip(),
       headers: { authorization: `Bearer ${u.token}`, 'x-pow-solution': `${ch.token}:${nonceN}` },
       payload: { category: 'sad', content: rnd('pow lolos') },
     });
@@ -175,7 +231,10 @@ describe('PoW eskalasi (T1H-005)', () => {
 describe('abuse worker terjadwal (T1H-005)', () => {
   it('rescore + auto-quarantine 3x kritis (via SQL, tanpa triase route)', async () => {
     const u = await newUser();
-    const c = await insertConfession({ authorWallet: u.acc.address, body: rnd('abuse tick target') });
+    const c = await insertConfession({
+      authorWallet: u.acc.address,
+      body: rnd('abuse tick target'),
+    });
     // 3 report kritis langsung via SQL agar triase route tidak ikut campur.
     for (const reason of ['THREAT', 'DOXXING', 'SPAM']) {
       await db.execute(sql`
@@ -187,7 +246,9 @@ describe('abuse worker terjadwal (T1H-005)', () => {
     assert.ok(rep.rescored >= 1);
     // 2 kritis (50) + 1 biasa (5) = 55; quarantine butuh >=3 kritis → tetap VISIBLE.
     const row = (
-      (await db.execute(sql`SELECT status, moderation_score AS s FROM confessions WHERE id = ${c.id}::uuid`)) as unknown as {
+      (await db.execute(
+        sql`SELECT status, moderation_score AS s FROM confessions WHERE id = ${c.id}::uuid`,
+      )) as unknown as {
         rows: Array<{ status: string; s: string }>;
       }
     ).rows[0];
@@ -200,7 +261,9 @@ describe('abuse worker terjadwal (T1H-005)', () => {
     const rep2 = await abuseTick(db);
     assert.equal(rep2.quarantined, 1);
     const row2 = (
-      (await db.execute(sql`SELECT status FROM confessions WHERE id = ${c.id}::uuid`)) as unknown as {
+      (await db.execute(
+        sql`SELECT status FROM confessions WHERE id = ${c.id}::uuid`,
+      )) as unknown as {
         rows: Array<{ status: string }>;
       }
     ).rows[0];
@@ -236,7 +299,12 @@ describe('storage IPFS (T1H-001)', () => {
   });
 
   it('fallback: primer gagal → sekunder inline; verify hash', async () => {
-    const boom = { name: 'boom', put: async () => { throw new Error('down'); } };
+    const boom = {
+      name: 'boom',
+      put: async () => {
+        throw new Error('down');
+      },
+    };
     const fb = new FallbackStorageAdapter(boom, new DbInlineAdapter());
     const ref = await fb.put('00'.repeat(32), 'apa saja');
     assert.equal(ref.provider, 'db:inline');
@@ -252,9 +320,21 @@ describe('skor ranking v2 (T1H-002)', () => {
   it('akun baru penuh → setengah base; 10 report → ×0.9^10', async () => {
     const { trendingScore } = await import('@booth/shared');
     const base = trendingScore({ reactions: 100, whispers: 10, uniqueEngagement: 50, ageHours: 5 });
-    const sybil = trendingScoreV2({ reactions: 100, whispers: 10, uniqueEngagement: 50, ageHours: 5, newAccountShare: 1 });
+    const sybil = trendingScoreV2({
+      reactions: 100,
+      whispers: 10,
+      uniqueEngagement: 50,
+      ageHours: 5,
+      newAccountShare: 1,
+    });
     assert.ok(Math.abs(sybil - base * 0.5) < 1e-9);
-    const rep = trendingScoreV2({ reactions: 100, whispers: 10, uniqueEngagement: 50, ageHours: 5, openReports: 10 });
+    const rep = trendingScoreV2({
+      reactions: 100,
+      whispers: 10,
+      uniqueEngagement: 50,
+      ageHours: 5,
+      openReports: 10,
+    });
     assert.ok(Math.abs(rep - base * Math.pow(0.9, 10)) < 1e-6);
     const rel = relatableScoreV2({ understand: 20, total: 25, ageHours: 2, openReports: 0 });
     assert.ok(rel > 0);

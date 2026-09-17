@@ -30,11 +30,7 @@ const MISMATCH_ALERT_THRESHOLD = 5; // alert jika mismatch > 5 per tick
 export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<IndexerReport> {
   const E: ChainEnv = env ?? {
     rpcUrl: process.env.RPC_URL ?? '',
-    contractAddress: (config.contractAddress && !config.contractAddress.startsWith('0x0000')
-      ? config.contractAddress
-      : process.env.CONTRACT_ADDRESS && !process.env.CONTRACT_ADDRESS.startsWith('0x0000')
-        ? process.env.CONTRACT_ADDRESS
-        : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0') as never,
+    contractAddress: config.contractAddress as never,
     chainId: config.chainId,
   };
   if (!E.rpcUrl) {
@@ -80,8 +76,16 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
       toBlock: targetTo,
     });
     report.events = logs.length;
+    const expectedAddress = E.contractAddress.toLowerCase();
     for (const log of logs) {
-      const a = log.args as unknown as { confessionId: string; contentHash: string };
+      // P0 #5: pastikan log berasal dari kontrak yang diharapkan (anti event asing),
+      // lalu verifikasi publisher bila tersedia.
+      if (log.address.toLowerCase() !== expectedAddress) continue;
+      const a = log.args as unknown as {
+        confessionId: string;
+        contentHash: string;
+        publisher?: string;
+      };
       if (!a?.confessionId) continue;
       const found = rowsOf<{ id: string; content_hash: string; status: string }>(
         await db.execute(sql`

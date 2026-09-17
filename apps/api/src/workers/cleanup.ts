@@ -1,6 +1,6 @@
 // AUDIT SEC-004 / DB-003 / DB-004: Periodic cleanup worker for stale DB rows.
 // Cleans up: expired auth nonces, expired sessions, old rate-limit buckets,
-// and expired idempotency keys.
+// expired idempotency keys, and consumed PoW solutions (P0 #4).
 // Run: `node dist/workers/cleanup.js` or add to cron (every hour recommended).
 
 import pg from 'pg';
@@ -40,6 +40,12 @@ async function cleanup() {
       `DELETE FROM idempotency_keys WHERE expires_at < now() RETURNING key`,
     );
     console.log(`[cleanup] Deleted ${idem.rowCount ?? 0} expired idempotency keys`);
+
+    // P0 #4: Delete consumed/expired PoW solutions (single-use records, TTL 10 mnt)
+    const pow = await pool.query(
+      `DELETE FROM pow_solutions WHERE expires_at < now() RETURNING solution_hash`,
+    );
+    console.log(`[cleanup] Deleted ${pow.rowCount ?? 0} expired PoW solutions`);
 
     console.log('[cleanup] Done.');
   } catch (err) {

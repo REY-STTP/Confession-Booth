@@ -58,11 +58,7 @@ export async function publisherTick(
 ): Promise<PublisherReport> {
   const E: PublisherEnv = env ?? {
     rpcUrl: process.env.RPC_URL ?? '',
-    contractAddress: (config.contractAddress && !config.contractAddress.startsWith('0x0000')
-      ? config.contractAddress
-      : process.env.CONTRACT_ADDRESS && !process.env.CONTRACT_ADDRESS.startsWith('0x0000')
-        ? process.env.CONTRACT_ADDRESS
-        : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0') as Hex,
+    contractAddress: config.contractAddress as Hex,
     chainId: config.chainId,
     publisherKey: (process.env.PUBLISHER_KEY ?? '0x') as Hex,
     // Gas/nonce config dari config.ts (env vars)

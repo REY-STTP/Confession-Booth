@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
@@ -282,16 +283,26 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // T1-042: bootstrap role pertama tanpa raw SQL. Dilindungi ADMIN_SECRET server-only.
+  // P0 #3: compare timing-safe, secret min 32 char, audit DB, bisa dimatikan pasca-bootstrap.
   app.post('/api/admin/grant-role', async (req, reply) => {
+    if (process.env.ADMIN_GRANT_ENABLED === 'false') {
+      return reply
+        .code(503)
+        .send({ error: { code: 'ADMIN_DISABLED', message: 'Admin bootstrap disabled.' } });
+    }
     if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'admin'))) return;
     const secret = process.env.ADMIN_SECRET ?? '';
-    if (!secret) {
+    if (!secret || secret.length < 32) {
       return reply
         .code(503)
         .send({ error: { code: 'ADMIN_DISABLED', message: 'Admin bootstrap disabled.' } });
     }
     const got = req.headers['x-admin-secret'];
-    if (got !== secret) {
+    const ok =
+      typeof got === 'string' &&
+      got.length === secret.length &&
+      timingSafeEqual(Buffer.from(got, 'utf8'), Buffer.from(secret, 'utf8'));
+    if (!ok) {
       return reply
         .code(403)
         .send({ error: { code: 'FORBIDDEN', message: 'Invalid admin secret.' } });
@@ -314,7 +325,15 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
       VALUES (${parsed.data.wallet.toLowerCase()}, ${chainId}, ${parsed.data.role}, 'ACTIVE', now(), now())
       ON CONFLICT (wallet_address) DO UPDATE SET role = EXCLUDED.role
     `);
-    req.log.info({ op: 'grant-role', role: parsed.data.role, wallet: parsed.data.wallet });
+    // P0 #3: audit trail bootstrap di admin_audit (ip hanya sebagai hash).
+    const ipHash = createHash('sha256').update(`booth-admin:${req.ip}`, 'utf8').digest('hex');
+    await db.insert(schema.adminAudit).values({
+      action: 'GRANT_ROLE',
+      walletAddress: parsed.data.wallet.toLowerCase(),
+      role: parsed.data.role,
+      ipHash,
+    });
+    req.log.info({ op: 'grant-role', role: parsed.data.role });
     return { ok: true };
   });
 };

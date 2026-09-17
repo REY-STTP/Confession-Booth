@@ -151,10 +151,15 @@ export async function verifyAndLogin(
   const refreshExpiresAt = new Date(now + config.refreshTtlMs);
 
   const user = await db.transaction(async (tx) => {
-    await tx
+    // P0 #2: konsumsi nonce atomik — UPDATE ... WHERE consumed_at IS NULL RETURNING.
+    // Dua verify konkuren dengan nonce sama: satu menang, sisanya NONCE_REUSED
+    // (cek row.consumedAt di atas hanya fast path, bukan pengaman race).
+    const consumed = await tx
       .update(schema.authNonces)
       .set({ consumedAt: new Date(now) })
-      .where(eq(schema.authNonces.id, row.id));
+      .where(and(eq(schema.authNonces.id, row.id), isNull(schema.authNonces.consumedAt)))
+      .returning({ id: schema.authNonces.id });
+    if (consumed.length === 0) throw new AuthError('NONCE_REUSED', 'Challenge already used.', 401);
 
     const found = await tx
       .select()

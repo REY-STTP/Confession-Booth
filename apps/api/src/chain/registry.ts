@@ -19,11 +19,15 @@ import { privateKeyToAccount } from 'viem/accounts';
 export const REGISTRY_ABI = parseAbi([
   'function publish(bytes32 confessionId, bytes32 contentHash, string contentCID, uint16 version)',
   'function exists(bytes32 confessionId) view returns (bool)',
-  'event ConfessionPublished(bytes32 indexed confessionId, bytes32 indexed contentHash, string contentCID, uint64 timestamp, uint16 version)',
+  'function owner() view returns (address)',
+  'function publishers(address who) view returns (bool)',
+  'function setPublisher(address who, bool allowed)',
+  'event PublisherUpdated(address indexed publisher, bool allowed)',
+  'event ConfessionPublished(bytes32 indexed confessionId, bytes32 indexed contentHash, address indexed publisher, string contentCID, uint64 timestamp, uint16 version)',
 ]);
 
 export const PUBLISHED_EVENT = parseAbiItem(
-  'event ConfessionPublished(bytes32 indexed confessionId, bytes32 indexed contentHash, string contentCID, uint64 timestamp, uint16 version)',
+  'event ConfessionPublished(bytes32 indexed confessionId, bytes32 indexed contentHash, address indexed publisher, string contentCID, uint64 timestamp, uint16 version)',
 );
 
 export interface ChainEnv {
@@ -42,7 +46,10 @@ export function chainDef(chainId: number, rpcUrl: string) {
 }
 
 export function publicClient(env: ChainEnv): PublicClient {
-  return createPublicClient({ chain: chainDef(env.chainId, env.rpcUrl), transport: http(env.rpcUrl) });
+  return createPublicClient({
+    chain: chainDef(env.chainId, env.rpcUrl),
+    transport: http(env.rpcUrl),
+  });
 }
 
 export function publisherAccount(key: Hex) {
@@ -59,7 +66,8 @@ export function walletClient(env: ChainEnv, key: Hex): WalletClient<HttpTranspor
 
 /** Samakan dua bytes32 hex terlepas dari prefix 0x / kapital. */
 export function eqBytes32(a: string, b: string): boolean {
-  const norm = (s: string) => (s.startsWith('0x') || s.startsWith('0X') ? s.slice(2) : s).toLowerCase();
+  const norm = (s: string) =>
+    (s.startsWith('0x') || s.startsWith('0X') ? s.slice(2) : s).toLowerCase();
   return norm(a) === norm(b);
 }
 

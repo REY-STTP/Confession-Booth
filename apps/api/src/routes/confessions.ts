@@ -17,6 +17,7 @@ import {
   type ConfessionRow,
 } from '../content.js';
 import { checkContent, isCategory, isReaction, CONFESSION_MAX } from '../validate.js';
+import { AuthError } from '../auth.js';
 import { buildMerkleTree, verifyAnonymousSignalProof } from '@booth/shared';
 import { withIdempotency } from '../idempotency.js';
 import {
@@ -51,6 +52,8 @@ export async function findConfession(
   return rows[0] ?? null;
 }
 
+const HEX64 = z.string().regex(/^[0-9a-fA-F]{64}$/);
+
 const confessBody = z.object({
   category: z.string().min(1).max(64),
   content: z.string().min(1).max(2000),
@@ -58,15 +61,25 @@ const confessBody = z.object({
   badgeType: z.string().min(1).max(64).optional(),
   zkProof: z
     .object({
-      merkleRoot: z.string().min(16),
-      nullifierHash: z.string().min(16),
-      epoch: z.number().int(),
+      // P0 #1: format hex ketat — hash 64 char, proof 64–256 char, epoch bounded.
+      merkleRoot: HEX64,
+      nullifierHash: HEX64,
+      epoch: z.number().int().min(0).max(999999999),
       scope: z.literal('confess'),
-      signal: z.string().min(16),
-      proof: z.string().min(16),
+      signal: HEX64,
+      proof: z.string().regex(/^[0-9a-fA-F]{64,256}$/),
     })
     .optional(),
 });
+
+/** P0 #1: stub proof mock hanya diizinkan bila eksplisit (ZK_MOCK=true) atau non-prod.
+ *  Prod tanpa ZK_MOCK=true → tolak sampai verifier Groth16 nyata tersedia. */
+function isZkMockAllowed(): boolean {
+  const v = process.env.ZK_MOCK;
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return process.env.NODE_ENV !== 'production';
+}
 
 const reactBody = z.object({ type: z.string().min(1).max(32) });
 
@@ -187,19 +200,27 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
     );
     const row = rows[0];
     if (!row) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
+    const expectedContract =
+      row.contract_address && !row.contract_address.startsWith('0x0000')
+        ? row.contract_address
+        : config.contractAddress && !config.contractAddress.startsWith('0x0000')
+          ? config.contractAddress
+          : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0';
+    // P0 #5: verifier off-chain assert — klaim CONFIRMED hanya valid bila kontrak
+    // dan chainId sesuai konfigurasi yang diharapkan (anti replay lintas-chain/fork).
+    const verified =
+      (row.status ?? 'PENDING_CHAIN') === 'CONFIRMED' &&
+      row.contract_address?.toLowerCase() === expectedContract.toLowerCase() &&
+      Number(row.chain_id) === config.chainId;
     return {
       publicId,
       contentHash: row.content_hash,
       txHash: row.transaction_hash,
       blockNumber: row.block_number,
       status: row.status ?? 'PENDING_CHAIN',
-      contractAddress:
-        row.contract_address && !row.contract_address.startsWith('0x0000')
-          ? row.contract_address
-          : config.contractAddress && !config.contractAddress.startsWith('0x0000')
-            ? config.contractAddress
-            : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0',
+      contractAddress: expectedContract,
       chainId: String(row.chain_id ?? config.chainId),
+      verified,
     };
   });
 
@@ -258,6 +279,16 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
 
     if (parsed.data.zkProof) {
       const zk = parsed.data.zkProof;
+      // P0 #1: jalur ZK di-throttle per-IP sama seperti sesi (sebelum verifikasi mahal).
+      if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'confess'))) return;
+      if (!isZkMockAllowed()) {
+        return reply.code(503).send({
+          error: {
+            code: 'ZK_VERIFIER_UNAVAILABLE',
+            message: 'Anonymous proofs unavailable.',
+          },
+        });
+      }
       if (zk.signal !== contentHash) {
         return reply.code(400).send({
           error: {
@@ -357,75 +388,106 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
     if (verdict.flag) {
       const { verifyPowSolution, issuePowChallenge } = await import('../pow.js');
       const sol = req.headers['x-pow-solution'];
-      if (typeof sol !== 'string' || !verifyPowSolution(sol)) {
+      // P0 #4: solusi PoW diikat ke subjek (user untuk sesi, IP untuk ZK anonim).
+      const powSubject = userId ? `user:${userId}` : `ip:${req.ip}`;
+      if (typeof sol !== 'string' || !(await verifyPowSolution(db, sol, powSubject))) {
         return reply.code(429).send({
           error: {
             code: 'POW_REQUIRED',
             message: 'Solve proof-of-work and retry.',
-            challenge: issuePowChallenge(),
+            challenge: issuePowChallenge(powSubject),
           },
         });
       }
     }
 
-    const create = async () => {
+    const create = async (): Promise<{ statusCode: number; body: unknown }> => {
       const publicId = newPublicId('c');
       const seed = newDisplaySeed();
       const now = new Date();
       const ref = await getStorage().put(contentHash, content);
-      await db.transaction(async (tx) => {
-        if (nullifierHash && parsed.data.zkProof) {
-          await tx.insert(schema.epochNullifiers).values({
-            nullifierHash,
-            epoch: parsed.data.zkProof.epoch,
-            scope: 'confess',
-          });
-        }
+      try {
+        await db.transaction(async (tx) => {
+          if (nullifierHash && parsed.data.zkProof) {
+            // P0 #1: klaim nullifier atomik — konflik = replay/race → 429, bukan 500.
+            // (SELECT pra-cek di atas hanya fast path dengan pesan jelas.)
+            const claimed = await tx
+              .insert(schema.epochNullifiers)
+              .values({
+                nullifierHash,
+                epoch: parsed.data.zkProof.epoch,
+                scope: 'confess',
+              })
+              .onConflictDoNothing()
+              .returning({ id: schema.epochNullifiers.id });
+            if (claimed.length === 0) {
+              throw new AuthError(
+                'RATE_LIMIT_EXCEEDED',
+                'Anonymous rate limit reached for this epoch.',
+                429,
+              );
+            }
+          }
 
-        const co = await tx
-          .insert(schema.contentObjects)
-          .values({ contentHash, storageProvider: ref.provider, storageCid: ref.cid })
-          .onConflictDoNothing({ target: schema.contentObjects.contentHash })
-          .returning({ id: schema.contentObjects.id });
-        let coId = co[0]?.id;
-        if (!coId) {
-          const again = await tx
-            .select({ id: schema.contentObjects.id })
-            .from(schema.contentObjects)
-            .where(eq(schema.contentObjects.contentHash, contentHash))
-            .limit(1);
-          coId = again[0].id;
-        }
-        const conf = await tx
-          .insert(schema.confessions)
-          .values({
-            publicId,
-            authorUserId: userId,
-            categoryId: cats[0].id,
-            roomId,
-            contentObjectId: coId,
-            bodyText: content,
-            displaySeed: seed,
-            status: 'VISIBLE',
-            publishedAt: now,
-            moderationScore: String(verdict.score),
-            nullifierHash,
-            proofType,
-            badgeType: badgeType ?? null,
-          })
-          .returning({ id: schema.confessions.id });
-        await tx.insert(schema.publications).values({
-          confessionId: conf[0].id,
-          chainId: config.chainId,
-          contractAddress:
-            config.contractAddress && !config.contractAddress.startsWith('0x0000')
-              ? config.contractAddress
-              : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0',
-          onchainConfessionId: onchainId(publicId),
-          contentHash,
-          status: 'PENDING_CHAIN',
+          const co = await tx
+            .insert(schema.contentObjects)
+            .values({ contentHash, storageProvider: ref.provider, storageCid: ref.cid })
+            .onConflictDoNothing({ target: schema.contentObjects.contentHash })
+            .returning({ id: schema.contentObjects.id });
+          let coId = co[0]?.id;
+          if (!coId) {
+            const again = await tx
+              .select({ id: schema.contentObjects.id })
+              .from(schema.contentObjects)
+              .where(eq(schema.contentObjects.contentHash, contentHash))
+              .limit(1);
+            coId = again[0].id;
+          }
+          const conf = await tx
+            .insert(schema.confessions)
+            .values({
+              publicId,
+              authorUserId: userId,
+              categoryId: cats[0].id,
+              roomId,
+              contentObjectId: coId,
+              bodyText: content,
+              displaySeed: seed,
+              status: 'VISIBLE',
+              publishedAt: now,
+              moderationScore: String(verdict.score),
+              nullifierHash,
+              proofType,
+              badgeType: badgeType ?? null,
+            })
+            .returning({ id: schema.confessions.id });
+          await tx.insert(schema.publications).values({
+            confessionId: conf[0].id,
+            chainId: config.chainId,
+            contractAddress:
+              config.contractAddress && !config.contractAddress.startsWith('0x0000')
+                ? config.contractAddress
+                : '0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0',
+            onchainConfessionId: onchainId(publicId),
+            contentHash,
+            status: 'PENDING_CHAIN',
+          });
         });
-      });
+      } catch (e) {
+        // P0 #1: race nullifier yang kalah → 429 konsisten (bukan 500).
+        if (e instanceof AuthError && e.code === 'RATE_LIMIT_EXCEEDED') {
+          return {
+            statusCode: 429,
+            body: {
+              error: {
+                code: 'RATE_LIMIT_EXCEEDED',
+                message: 'Anonymous rate limit reached for this epoch.',
+              },
+            },
+          };
+        }
+        throw e;
+      }
 
       if (userId) {
         await checkAndAwardBadge(db, userId, 'MIDNIGHT_SOUL');

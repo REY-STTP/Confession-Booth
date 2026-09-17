@@ -16,6 +16,9 @@ import {
 const app = await buildApp();
 const db = getDb();
 
+// P0 #1: stub proof mock hanya untuk test eksplisit (prod tanpa ZK_MOCK=true → 503).
+process.env.ZK_MOCK = 'true';
+
 before(async () => {
   await app.ready();
 });
@@ -118,14 +121,63 @@ describe('Fase 2: ZK Anonymous Credentials & Nullifiers API (T2-001, T2-003)', (
           nullifierHash: 'a'.repeat(64),
           epoch: getCurrentEpoch(),
           scope: 'confess',
-          signal: 'wrong_signal_hash'.padEnd(64, '0'),
-          proof: 'proof_bytes'.padEnd(64, '1'),
+          // P0 #1: hex valid tapi salah nilai → tetap SIGNAL_MISMATCH (bukan INVALID_CONTENT).
+          signal: 'ab'.repeat(32),
+          proof: 'cd'.repeat(32),
         },
       },
     });
 
     assert.equal(res.statusCode, 400);
     assert.equal(res.json().error.code, 'SIGNAL_MISMATCH');
+  });
+
+  it('P0 #1: ZK_MOCK=false → 503; payload non-hex → 400 INVALID_CONTENT', async () => {
+    const prev = process.env.ZK_MOCK;
+    try {
+      process.env.ZK_MOCK = 'false';
+      const gated = await app.inject({
+        method: 'POST',
+        url: '/api/confessions',
+        remoteAddress: ip(),
+        payload: {
+          category: 'deep',
+          content: 'Confession gate mock',
+          zkProof: {
+            merkleRoot: 'a'.repeat(64),
+            nullifierHash: 'b'.repeat(64),
+            epoch: getCurrentEpoch(),
+            scope: 'confess',
+            signal: 'c'.repeat(64),
+            proof: 'd'.repeat(64),
+          },
+        },
+      });
+      assert.equal(gated.statusCode, 503);
+      assert.equal(gated.json().error.code, 'ZK_VERIFIER_UNAVAILABLE');
+    } finally {
+      process.env.ZK_MOCK = prev ?? 'true';
+    }
+
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/confessions',
+      remoteAddress: ip(),
+      payload: {
+        category: 'deep',
+        content: 'Confession hex invalid',
+        zkProof: {
+          merkleRoot: 'zz-top',
+          nullifierHash: 'b'.repeat(64),
+          epoch: getCurrentEpoch(),
+          scope: 'confess',
+          signal: 'c'.repeat(64),
+          proof: 'd'.repeat(64),
+        },
+      },
+    });
+    assert.equal(bad.statusCode, 400);
+    assert.equal(bad.json().error.code, 'INVALID_CONTENT');
   });
 
   it('POST /api/confessions berhasil mengirim ZK anonymous confession tanpa authorUserId (T2-001, T2-003)', async () => {
