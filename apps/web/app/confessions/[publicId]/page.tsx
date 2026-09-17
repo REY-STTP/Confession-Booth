@@ -138,13 +138,14 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
     });
 
     try {
+      // Kontrak API: POST { type: UPPERCASE } (bukan { reaction: lowercase }).
       const res = on
         ? await apiFetch(`/api/confessions/${publicId}/reactions`, accessToken, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reaction: key }),
+            body: JSON.stringify({ type }),
           })
-        : await apiFetch(`/api/confessions/${publicId}/reactions/${key}`, accessToken, {
+        : await apiFetch(`/api/confessions/${publicId}/reactions/${type}`, accessToken, {
             method: 'DELETE',
           });
 
