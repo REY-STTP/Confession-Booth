@@ -25,6 +25,23 @@ const config: HardhatUserConfig = {
       accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
     },
   },
+  // Etherscan API V2 (endpoint V1 deprecated): satu apiURL + chainid per jaringan.
+  etherscan: {
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY ?? '',
+    },
+    customChains: [
+      {
+        network: 'sepolia',
+        chainId: 11155111,
+        urls: {
+          apiURL: 'https://api.etherscan.io/v2/api?chainid=11155111',
+          browserURL: 'https://sepolia.etherscan.io',
+        },
+      },
+    ],
+  },
+  sourcify: { enabled: false },
 };
 
 export default config;

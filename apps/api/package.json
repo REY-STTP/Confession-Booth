@@ -12,6 +12,7 @@
     "pretest": "npm run build",
     "start": "node ./dist/index.js",
     "db:migrate": "node scripts/db/migrate.mjs up",
+    "db:query": "node scripts/db/query.mjs",
     "db:rollback": "node scripts/db/migrate.mjs down",
     "db:seed": "node scripts/db/seed.mjs",
     "db:backup": "node scripts/db/backup.mjs backup",

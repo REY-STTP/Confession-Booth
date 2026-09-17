@@ -1,4 +1,8 @@
 {
-  "address": "0x22bEfE0BF04Ee694bdAe5CA20A06bE9F93c6dFd0",
-  "network": "sepolia"
+  "address": "0xa8302048773DD213B9D311c2abda199B14339188",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deployer": "0x1d1aFC2d015963017bED1De13e4ed6c3d3ED1618",
+  "publisher": "0x1d1aFC2d015963017bED1De13e4ed6c3d3ED1618",
+  "block": 11726162
 }
