@@ -5,8 +5,10 @@ FROM node:22-alpine AS build
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
+COPY packages/shared/package.json packages/shared/
 RUN npm ci --workspace @booth/web --include-workspace-root
 COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
 COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
@@ -14,18 +16,21 @@ ARG NEXT_PUBLIC_CHAIN_ID=11155111
 ENV NEXT_PUBLIC_CHAIN_ID=$NEXT_PUBLIC_CHAIN_ID
 ARG NEXT_PUBLIC_CONTRACT_ADDRESS=0xa8302048773DD213B9D311c2abda199B14339188
 ENV NEXT_PUBLIC_CONTRACT_ADDRESS=$NEXT_PUBLIC_CONTRACT_ADDRESS
-RUN npm run build --workspace @booth/web
+# shared/dist dibangun eksplisit (prebuild web mengulanginya; murah dan idempoten).
+RUN npm run build --workspace @booth/shared && npm run build --workspace @booth/web
 
 FROM node:22-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
+COPY packages/shared/package.json packages/shared/
 # --ignore-scripts: jangan jalankan root `prepare` (husky) tanpa devDeps.
 RUN npm ci --omit=dev --ignore-scripts --workspace @booth/web --include-workspace-root \
   && rm -rf /root/.npm
 COPY --from=build /repo/apps/web/.next ./apps/web/.next
 COPY --from=build /repo/apps/web/next.config.mjs ./apps/web/next.config.mjs
 COPY --from=build /repo/apps/web/package.json ./apps/web/package.json
+COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
 RUN addgroup -S booth && adduser -S booth -G booth && chown -R booth:booth /app
 USER booth
 WORKDIR /app/apps/web
