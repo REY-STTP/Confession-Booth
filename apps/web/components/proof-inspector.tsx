@@ -364,9 +364,10 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                 <div className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3">
                   <span className="text-muted-foreground font-medium block">Block Height</span>
                   <p className="font-mono text-xs text-foreground">
+                    {/* Digit polos (tanpa toLocaleString): pemisah ribuan beda-beda per locale. */}
                     {blockValidFor(proof.blockNumber)
                       ? proof.blockNumber
-                        ? `#${proof.blockNumber.toLocaleString()}`
+                        ? `#${proof.blockNumber}`
                         : 'Pending'
                       : 'Invalid'}
                   </p>
