@@ -426,6 +426,36 @@ describe('reports + moderation (T1-014/T1-015)', () => {
     assert.deepEqual(assertPublicSafe(authed.json()), []);
   });
 
+  it('feed langsung mencerminkan reaksi + whisper (bust cache)', async () => {
+    const author = await newUser();
+    const reactor = await newUser();
+    const pid = (await publish(author.token, 'love', rnd('bust cache'))).json().publicId;
+    const feedOf = async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/feed?sort=new&limit=50' });
+      assert.equal(res.statusCode, 200);
+      return res.json().items.find((i: { publicId: string }) => i.publicId === pid);
+    };
+    await feedOf(); // hangatkan cache
+    const rr = await app.inject({
+      method: 'POST',
+      url: `/api/confessions/${pid}/reactions`,
+      remoteAddress: ip(),
+      headers: { authorization: `Bearer ${reactor.token}` },
+      payload: { type: 'LOVE' },
+    });
+    assert.equal(rr.statusCode, 200);
+    assert.equal((await feedOf()).reactions.love, 1);
+    const wr = await app.inject({
+      method: 'POST',
+      url: `/api/confessions/${pid}/whispers`,
+      remoteAddress: ip(),
+      headers: { authorization: `Bearer ${reactor.token}` },
+      payload: { content: rnd('whisper bust') },
+    });
+    assert.equal(wr.statusCode, 201);
+    assert.equal((await feedOf()).whisperCount, 1);
+  });
+
   it('P1 #9: resolve hanya reason yang ditindak, anon throttle per-IP', async () => {
     const author = await newUser();
     const mod = await newUser();

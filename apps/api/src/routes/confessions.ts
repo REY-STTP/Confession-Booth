@@ -606,11 +606,16 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
       return { statusCode: 200, body: { ok: true, reacted: ins.length > 0 } };
     };
     const idemKey = req.headers['idempotency-key'];
+    let r: { statusCode: number; body: unknown };
     if (typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128) {
-      const r = await withIdempotency(db, req.user!.id, `${found.id}:${idemKey}`, apply);
-      return reply.code(r.statusCode).send(r.body);
+      r = await withIdempotency(db, req.user!.id, `${found.id}:${idemKey}`, apply);
+    } else {
+      r = await apply();
     }
-    const r = await apply();
+    // Count reaksi berubah → bust cache feed (kalau tidak, /feed basi s.d. 60 dtk).
+    if (r.statusCode === 200) {
+      await feedCacheInvalidate().catch((err) => app.log.error(err, 'feedCacheInvalidate failed'));
+    }
     return reply.code(r.statusCode).send(r.body);
   });
 
@@ -638,6 +643,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
           eq(schema.reactions.reactionType, type as 'UNDERSTAND'),
         ),
       );
+    await feedCacheInvalidate().catch((err) => app.log.error(err, 'feedCacheInvalidate failed'));
     return { ok: true };
   });
 };

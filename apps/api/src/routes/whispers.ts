@@ -4,6 +4,7 @@ import { sql, eq } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { getStorage } from '../storage.js';
+import { feedCacheInvalidate } from '../cache.js';
 import { canonicalHash, displayName, newDisplaySeed, newPublicId } from '../content.js';
 // P1 #11: whisper schema dari SSOT shared.
 import { whisperSchema } from '@booth/shared';
@@ -251,11 +252,16 @@ export const whisperRoutes: FastifyPluginAsync = async (app) => {
       };
     };
     const idemKey = req.headers['idempotency-key'];
+    let r: { statusCode: number; body: unknown };
     if (typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128) {
-      const r = await withIdempotency(db, userId, `${found.id}:${idemKey}`, create);
-      return reply.code(r.statusCode).send(r.body);
+      r = await withIdempotency(db, userId, `${found.id}:${idemKey}`, create);
+    } else {
+      r = await create();
     }
-    const r = await create();
+    // whisperCount berubah → bust cache feed.
+    if (r.statusCode === 201) {
+      await feedCacheInvalidate().catch((err) => app.log.error(err, 'feedCacheInvalidate failed'));
+    }
     return reply.code(r.statusCode).send(r.body);
   });
 };
