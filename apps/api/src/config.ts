@@ -30,10 +30,39 @@ if (isProd && !process.env.DATABASE_URL) {
   throw new Error('[booth-api] DATABASE_URL wajib di-set di production');
 }
 
+// P1 #6: SESSION_SECRET fail-closed — pendek (<32) fatal di semua env,
+// karena dipakai untuk sesi + HMAC PoW. Default dev 33 char tetap lolos.
+function assertSessionSecret(s: string): string {
+  if (s.length < 32) {
+    if (isProd) throw new Error('[booth-api] SESSION_SECRET min 32 chars di production');
+    console.warn('[booth-api] SESSION_SECRET < 32 chars — hanya untuk dev/test lokal');
+  }
+  return s;
+}
+
+// P1 #6: trustProxy eksplisit — default false (IP spoof via X-Forwarded-For
+// mematikan rate-limit). Set TRUST_PROXY=true hanya bila langsung di belakang
+// LB/reverse-proxy tepercaya.
+function parseTrustProxy(): boolean {
+  const v = (process.env.TRUST_PROXY ?? '').trim().toLowerCase();
+  return v === 'true' || v === '1';
+}
+
+function parseCorsOrigin(): string[] {
+  const list = (process.env.CORS_ORIGIN ?? 'http://localhost:3000').split(',');
+  // P1 #6: '*' + credentials adalah kombinasi terlarang di production.
+  if (isProd && list.some((s) => s.trim() === '*')) {
+    throw new Error('[booth-api] CORS_ORIGIN=* terlarang dengan credentials di production');
+  }
+  return list;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
-  sessionSecret: process.env.SESSION_SECRET ?? 'dev-only-change-me-min-32-chars',
+  sessionSecret: assertSessionSecret(
+    process.env.SESSION_SECRET ?? 'dev-only-change-me-min-32-chars',
+  ),
   appDomain: process.env.APP_DOMAIN ?? 'booth.local',
   appName: 'Confession Booth',
   chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111),
@@ -42,7 +71,8 @@ export const config = {
     const raw = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
     return raw && !raw.startsWith('0x0000') ? raw : '0xa8302048773DD213B9D311c2abda199B14339188';
   })(),
-  corsOrigin: (process.env.CORS_ORIGIN ?? 'http://localhost:3000').split(','),
+  corsOrigin: parseCorsOrigin(),
+  trustProxy: parseTrustProxy(),
   accessTtlMs: 60 * 60 * 1000, // 1 jam
   refreshTtlMs: 30 * 24 * 3600 * 1000, // 30 hari
   nonceTtlMs: 5 * 60 * 1000, // 5 menit

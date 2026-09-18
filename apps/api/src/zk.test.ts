@@ -88,6 +88,59 @@ describe('Fase 2: ZK Anonymous Credentials & Nullifiers API (T2-001, T2-003)', (
     assert.ok(body.totalMembers >= 1);
   });
 
+  it('P1 #7: cap 5 komitmen per user + paginasi merkle-root', async () => {
+    const user = await newUser();
+    const stamp = Date.now();
+    for (let i = 0; i < 5; i++) {
+      const identity = deriveAnonymousIdentity(`0xcapTest_${stamp}_${i}`);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/zk/register-commitment',
+        remoteAddress: ip(),
+        headers: { authorization: `Bearer ${user.token}` },
+        payload: { commitment: identity.commitment },
+      });
+      assert.equal(res.statusCode, 200);
+    }
+    // Registrasi ulang milik sendiri tetap idempoten (200, bukan 429).
+    const retrySame = await app.inject({
+      method: 'POST',
+      url: '/api/zk/register-commitment',
+      remoteAddress: ip(),
+      headers: { authorization: `Bearer ${user.token}` },
+      payload: { commitment: deriveAnonymousIdentity(`0xcapTest_${stamp}_0`).commitment },
+    });
+    assert.equal(retrySame.statusCode, 200);
+    // Komitmen ke-6 yang baru → 429 COMMITMENT_LIMIT.
+    const sixth = await app.inject({
+      method: 'POST',
+      url: '/api/zk/register-commitment',
+      remoteAddress: ip(),
+      headers: { authorization: `Bearer ${user.token}` },
+      payload: { commitment: deriveAnonymousIdentity(`0xcapTest_${stamp}_5`).commitment },
+    });
+    assert.equal(sixth.statusCode, 429);
+    assert.equal(sixth.json().error.code, 'COMMITMENT_LIMIT');
+
+    const page = await app.inject({
+      method: 'GET',
+      url: '/api/zk/merkle-root?limit=1&offset=0',
+      remoteAddress: ip(),
+    });
+    assert.equal(page.statusCode, 200);
+    const body = page.json();
+    assert.equal(body.commitments.length, 1);
+    assert.ok(body.totalMembers >= 1);
+    assert.ok(body.nextOffset === null || typeof body.nextOffset === 'number');
+
+    const bad = await app.inject({
+      method: 'GET',
+      url: '/api/zk/merkle-root?limit=xyz',
+      remoteAddress: ip(),
+    });
+    assert.equal(bad.statusCode, 400);
+  });
+
   it('GET /api/zk/merkle-root mengembalikan Merkle root terkini', async () => {
     const res = await app.inject({
       method: 'GET',

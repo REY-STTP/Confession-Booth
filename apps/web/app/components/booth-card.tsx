@@ -12,7 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { timeAgo, type FeedItem, BADGE_META } from '@/lib/booth';
+import { timeAgo, type FeedItem, BADGE_META, safeDisplayName } from '@/lib/booth';
 import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +52,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
       <Card
         className="group relative border-border/75 bg-card/80 transition-all duration-200 hover:border-primary/40 hover:bg-card hover:shadow-card-hover"
         role="article"
-        aria-label={`Confession by ${item.author.displayName}`}
+        aria-label={`Confession by ${safeDisplayName(item.author.displayName)}`}
       >
         <CardHeader className="flex flex-row items-start justify-between gap-3 p-4 pb-2 sm:p-5 sm:pb-3">
           {/* Author & Proof info */}
@@ -64,7 +64,7 @@ export function BoothCard({ item }: { item: FeedItem }) {
               <BrandMark size="sm" />
             </div>
             <span className="font-medium text-xs sm:text-sm text-foreground tracking-tight">
-              {item.author.displayName}
+              {safeDisplayName(item.author.displayName)}
             </span>
 
             {item.proofType === 'ZK' ? (

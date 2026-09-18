@@ -14,6 +14,7 @@ import {
 interface ZkStepperProps {
   open: boolean;
   currentStatus: string;
+  onCancel?: () => void;
 }
 
 interface StepItem {
@@ -50,7 +51,7 @@ const STEPS: StepItem[] = [
   },
 ];
 
-export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
+export function ZkStepper({ open, currentStatus, onCancel }: ZkStepperProps) {
   // Determine active step index (0-3) based on currentStatus text
   let activeIndex = 0;
   const statusLower = currentStatus.toLowerCase();
@@ -187,6 +188,17 @@ export function ZkStepper({ open, currentStatus }: ZkStepperProps) {
             server.
           </span>
         </p>
+
+        {/* P1 #7: keluar darurat bila komputasi macet (PoW/ZK hang). */}
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mx-auto flex items-center rounded-full border border-border/70 px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Cancel
+          </button>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

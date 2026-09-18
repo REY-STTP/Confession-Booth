@@ -50,6 +50,8 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
   const [whispers, setWhispers] = useState<WhisperItem[]>([]);
   const [reportOpen, setReportOpen] = useState(false);
   const [reacted, setReacted] = useState<Record<string, boolean>>({});
+  // P1 #13: cegah inisialisasi ulang menimpa toggle optimistik pengguna.
+  const [reactedInit, setReactedInit] = useState(false);
   const [whisper, setWhisper] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: string; author: string } | null>(null);
   const [userBadges, setUserBadges] = useState<UserBadgeItem[]>([]);
@@ -81,6 +83,15 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
           return;
         }
         setItem(data);
+        // P1 #13: pulihkan status reacted dari server (tahan refresh).
+        // Merge di bawah toggle pengguna (tak ada interaksi sebelum item tampil).
+        if (Array.isArray(data?.reactedByMe)) {
+          const init: Record<string, boolean> = {};
+          for (const t of data.reactedByMe) {
+            if (typeof t === 'string' && t) init[t] = true;
+          }
+          if (!cancelled) setReacted((prev) => ({ ...init, ...prev }));
+        }
         try {
           const w = await fetch(
             `${API_URL}/api/confessions/${encodeURIComponent(publicId)}/whispers`,
@@ -102,6 +113,28 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
       cancelled = true;
     };
   }, [publicId]);
+
+  // P1 #13: fetch awal anonim — susulkan fetch terautentikasi saat token tiba
+  // (mis. pulih sesi) agar reactedByMe terisi tanpa reload.
+  useEffect(() => {
+    if (!accessToken || !item || reactedInit) return;
+    let cancelled = false;
+    apiFetch(`/api/confessions/${encodeURIComponent(publicId)}`, accessToken)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data || !Array.isArray(data.reactedByMe)) return;
+        const init: Record<string, boolean> = {};
+        for (const t of data.reactedByMe) {
+          if (typeof t === 'string' && t) init[t] = true;
+        }
+        setReacted((prev) => ({ ...init, ...prev }));
+        setReactedInit(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, item, publicId, reactedInit]);
 
   useEffect(() => {
     if (accessToken) {
@@ -459,7 +492,8 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
                 </div>
               ) : (
                 <span className="text-[11px] text-muted-foreground">
-                  All whispers are sent anonymously without wallet identities.
+                  All whispers appear anonymous publicly, but are sent under your session
+                  (pseudonymous — not zero-knowledge).
                 </span>
               )}
 

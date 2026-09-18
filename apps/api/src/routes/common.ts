@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { sql } from 'drizzle-orm';
-import { z } from 'zod';
+// P1 #11: feedQuery dari SSOT shared (diimpor ulang agar import-site tak berubah).
+import { feedQuerySchema } from '@booth/shared';
 import { config } from '../config.js';
 import { getDb } from '../db/client.js';
 import { checkRateLimit, type RateAction } from '../ratelimit.js';
@@ -95,8 +96,9 @@ export function checkCsrf(req: FastifyRequest, reply: FastifyReply): boolean {
   }
   try {
     const o = new URL(origin);
+    // P1 #6: tanpa shortcut '*' — origin harus eksplisit terdaftar.
+    // (config menolak '*' + credentials di production saat boot.)
     const allowed = new Set(config.corsOrigin.map((s) => s.trim()).filter(Boolean));
-    if (allowed.has('*')) return true;
     if (allowed.has(o.origin)) return true;
     reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Origin not allowed.' } });
     return false;
@@ -201,15 +203,7 @@ export async function whisperCountMap(db: Db, ids: string[]): Promise<Map<string
   return map;
 }
 
-export const feedQuery = z.object({
-  sort: z.enum(['new', 'trending', 'relatable']).default('new'),
-  category: z.string().min(1).max(64).optional(),
-  room: z.string().min(1).max(64).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
-  cursor: z.string().min(1).max(512).optional(),
-  q: z.string().min(1).max(200).optional(),
-  slot: z.enum(['any', 'midnight']).default('any'),
-});
+export const feedQuery = feedQuerySchema;
 
 export const CRITICAL_REASONS = new Set(['THREAT', 'DOXXING', 'SEXUAL_EXPLOITATION']);
 

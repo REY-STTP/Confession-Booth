@@ -201,10 +201,10 @@ export async function verifyAndLogin(
         .returning();
       u = ins[0];
     } else {
+      // P1 #10: AuthError terstruktur (mapping 403 FORBIDDEN di route terjaga,
+      // tanpa pesan bahasa-spesifik yang membocorkan fingerprinting).
       if (u.status === 'BANNED') {
-        const err = new Error('Akun ini telah diblokir.');
-        (err as unknown as { statusCode: number }).statusCode = 403;
-        throw err;
+        throw new AuthError('FORBIDDEN', 'Account restricted.', 403);
       }
       // Update lastSeenAt and chainId; only set wallet_first_tx_at if null (first verified login)
       // JANGAN reset status ke 'ACTIVE' agar status BANNED/RESTRICTED tidak hilang
@@ -226,6 +226,9 @@ export async function verifyAndLogin(
     ]);
     return u;
   });
+
+  // P1 #10: tegakkan batas sesi (best-effort — kegagalan cap tak boleh menggagalkan login).
+  await enforceSessionCap(db, user.id).catch(() => {});
 
   return {
     user: { id: user.id, walletAddress: user.walletAddress, role: user.role, status: user.status },
@@ -334,7 +337,8 @@ export async function rotateRefresh(
     return row.user.id; // return userId untuk konfirmasi
   });
 
-  // Jika sampai sini, transaksi sukses
+  // Jika sampai sini, transaksi sukses — tegakkan batas sesi (best-effort).
+  await enforceSessionCap(db, result).catch(() => {});
   return {
     accessToken,
     accessExpiresAt: accessExpiresAt.toISOString(),

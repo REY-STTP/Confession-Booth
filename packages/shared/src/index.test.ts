@@ -7,6 +7,7 @@ import {
   countChars,
   normalizeContent,
   hashContent,
+  canonicalHash,
   makeAnonymousName,
   assertPublicSafe,
   trendingScore,
@@ -73,6 +74,13 @@ describe('validateConfession', () => {
     const b = 'é'; // e + U+0301
     assert.equal(normalizeContent(a), normalizeContent(b));
     assert.equal(hashContent(a), hashContent(b));
+  });
+  it('P1 #11 S2: hashContent kanonis — mixed-case sama dengan canonicalHash', () => {
+    assert.equal(hashContent('MiXeD Case TeSt'), canonicalHash('MiXeD Case TeSt'));
+    assert.equal(
+      hashContent('Verifikasi Integritas Ipfs'),
+      canonicalHash('Verifikasi Integritas Ipfs'),
+    );
   });
 });
 

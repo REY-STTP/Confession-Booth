@@ -64,7 +64,7 @@ const EMOTION_CATEGORIES = [
 
 /** Composer nyata T1-032 / Fase 2 ZK Stealth — auth wajib, idempotency UUID, render plaintext. */
 export function ComposerForm() {
-  const { accessToken, state, getOrRequestSignature } = useSession();
+  const { accessToken, state, getOrRequestSignature, clearSignature } = useSession();
   const [content, setContent] = React.useState('');
   const [category, setCategory] = React.useState('sad');
   const [rooms, setRooms] = React.useState<RoomItem[]>([]);
@@ -196,10 +196,24 @@ export function ComposerForm() {
         const identity = await deriveAnonymousIdentityBrowser(sig);
 
         setZkStep('Verifying anonymous Merkle Tree pool…');
-        let rootRes = await fetch(`${API_URL}/api/zk/merkle-root`);
-        if (!rootRes.ok) throw new Error('Failed to reach ZK Merkle root endpoint.');
-        let rootData = await rootRes.json();
-        let commitments: string[] = rootData.commitments ?? [];
+        // P1 #7: merkle-root kini paginasi — kumpulkan semua halaman.
+        async function fetchAllCommitments(): Promise<string[]> {
+          const out: string[] = [];
+          let offset: number | null = 0;
+          let guard = 0;
+          while (offset !== null && guard < 50) {
+            guard += 1;
+            const r: Response = await fetch(
+              `${API_URL}/api/zk/merkle-root?limit=1000&offset=${offset}`,
+            );
+            if (!r.ok) throw new Error('Failed to reach ZK Merkle root endpoint.');
+            const d: { commitments?: string[]; nextOffset?: number | null } = await r.json();
+            out.push(...(d.commitments ?? []));
+            offset = typeof d.nextOffset === 'number' ? d.nextOffset : null;
+          }
+          return out;
+        }
+        let commitments: string[] = await fetchAllCommitments();
 
         let leafIndex = commitments.indexOf(identity.commitment);
         if (leafIndex < 0) {
@@ -216,10 +230,12 @@ export function ComposerForm() {
             const b = await regRes.json().catch(() => ({}));
             throw new Error(b?.error?.message ?? 'Failed to register identity commitment.');
           }
-          rootRes = await fetch(`${API_URL}/api/zk/merkle-root`);
-          rootData = await rootRes.json();
-          commitments = rootData.commitments ?? [];
+          commitments = await fetchAllCommitments();
           leafIndex = commitments.indexOf(identity.commitment);
+          // P1 #7: guard pasca re-fetch (registrasi bisa tertunda/terpotong).
+          if (leafIndex < 0) {
+            throw new Error('Commitment belum terindeks, coba lagi.');
+          }
         }
 
         setZkStep('Generating Zero-Knowledge Proof in browser…');
@@ -235,8 +251,10 @@ export function ComposerForm() {
         });
 
         setZkStep('Publishing unlinkable confession (zero session tokens)…');
+        // P1 #7: omit agar HttpOnly refresh cookie tak ikut terkirim (klaim stealth).
         res = await fetch(`${API_URL}/api/confessions`, {
           method: 'POST',
+          credentials: 'omit',
           headers: {
             'Content-Type': 'application/json',
             'Idempotency-Key': idemKey,
@@ -285,6 +303,8 @@ export function ComposerForm() {
       const body = await res.json();
       setPublicId(body.publicId ?? body.id ?? '');
       setPublishedProofType(body.proofType ?? (privacyMode === 'zk' ? 'ZK' : 'SESSION'));
+      // P1 #7: signature adalah root identitas — hapus dari RAM setelah publish.
+      if (privacyMode === 'zk') clearSignature();
       setStatus('visible');
       toast.success('Confession published to the sanctuary!');
     } catch (err) {
@@ -305,7 +325,14 @@ export function ComposerForm() {
   return (
     <div className="space-y-6">
       {/* ZK Stepper Modal */}
-      <ZkStepper open={status === 'pending' && privacyMode === 'zk'} currentStatus={zkStep} />
+      <ZkStepper
+        open={status === 'pending' && privacyMode === 'zk'}
+        currentStatus={zkStep}
+        onCancel={() => {
+          setStatus('idle');
+          setZkStep('');
+        }}
+      />
 
       {/* Success State Banner */}
       {status === 'visible' ? (
@@ -454,8 +481,9 @@ export function ComposerForm() {
                 <p className="leading-relaxed">
                   <strong>Anonymous (Unverified Preview):</strong> Membership proof is generated
                   locally in your browser via Merkle Tree &amp; Nullifier. Request is sent{' '}
-                  <em>without session tokens</em>. Full cryptographic verification is not yet
-                  enforced.
+                  <em>without session tokens</em>. Commitment is registered once under your session
+                  — unlinkability depends on the anonymity-set size. Full cryptographic verification
+                  is not yet enforced.
                 </p>
               </div>
             ) : null}

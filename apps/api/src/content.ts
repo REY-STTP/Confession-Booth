@@ -4,8 +4,7 @@
 
 import { randomBytes, randomInt } from 'node:crypto';
 import { keccak256, toHex } from 'viem';
-import { createHash } from 'node:crypto';
-import { makeAnonymousName, normalizeForDedup } from '@booth/shared';
+import { canonicalHash as sharedCanonicalHash, makeAnonymousName } from '@booth/shared';
 
 export function newPublicId(prefix: 'c' | 'w'): string {
   return `${prefix}_${randomBytes(9).toString('base64url')}`;
@@ -24,11 +23,12 @@ export function onchainId(publicId: string): string {
   return keccak256(toHex(publicId));
 }
 
-/** Hash kanonis konten: NFC + lowercase + collapse whitespace (didokumentasikan).
+/** Hash kanonis konten — delegasi ke SSOT shared (P1 #11 S2).
+ *  NFC + lowercase + collapse whitespace (didokumentasikan).
  *  Dipakai untuk contentHash on-chain DAN deteksi duplikat — verifier menghitung
  *  ulang dengan aturan yang sama: sha256(normalizeForDedup(body)). */
 export function canonicalHash(body: string): string {
-  return createHash('sha256').update(normalizeForDedup(body), 'utf8').digest('hex');
+  return sharedCanonicalHash(body);
 }
 
 export interface PublicConfession {
@@ -44,6 +44,8 @@ export interface PublicConfession {
   proofType?: string;
   roomSlug?: string;
   badgeType?: string;
+  /** P1 #13: tipe reaksi milik pembaca (hanya bila terautentikasi, UPPER enum). */
+  reactedByMe?: string[];
 }
 
 export interface ConfessionRow {
@@ -62,6 +64,7 @@ export function projectConfession(
   row: ConfessionRow,
   reactions: Record<string, number>,
   whisperCount: number,
+  reactedByMe?: string[],
 ): PublicConfession {
   return {
     id: row.public_id,
@@ -82,6 +85,8 @@ export function projectConfession(
     proofType: row.proof_type ?? 'SESSION',
     roomSlug: row.room_slug ?? undefined,
     badgeType: row.badge_type ?? undefined,
+    // P1 #13: hanya diisi bila pemanggil terautentikasi; anon → undefined (hemat + privat).
+    ...(reactedByMe && reactedByMe.length > 0 ? { reactedByMe } : {}),
   };
 }
 

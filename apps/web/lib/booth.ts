@@ -1,6 +1,19 @@
 // Client data layer Fase 0: coba API nyata, fallback ke mock lokal bila API mati.
 // Tidak ada wallet/secret yang disimpan di sini.
 // T1-025: base URL dari NEXT_PUBLIC_API_URL (Vercel prod), fallback localhost hanya dev.
+// P1 #11: konstanta runtime dari SSOT @booth/shared/constants (browser-safe,
+// tanpa node:crypto). Web TIDAK mengimpor '@booth/shared' utama di bundle client.
+
+import {
+  BADGES as SHARED_BADGES,
+  CATEGORIES as SHARED_CATEGORIES,
+  countChars as sharedCountChars,
+  isBadgeType,
+  type BadgeType,
+} from '@booth/shared/constants';
+
+export type { BadgeType };
+export { isBadgeType };
 
 export interface FeedItem {
   id: string;
@@ -14,6 +27,8 @@ export interface FeedItem {
   proofType?: string;
   roomSlug?: string;
   badgeType?: string;
+  /** P1 #13: tipe reaksi milik pembaca (UPPER) — hanya bila terautentikasi. */
+  reactedByMe?: string[];
 }
 
 export interface RoomItem {
@@ -41,35 +56,24 @@ export interface WhisperItem {
   badgeType?: string | null;
 }
 
+// P1 #11: metadata badge dari SSOT shared (bentuk Record dipertahankan untuk konsumen).
 export const BADGE_META: Record<
   string,
   { label: string; icon: string; desc: string; color: string }
-> = {
-  EMPATHETIC_LISTENER: {
-    label: 'Empathetic Listener',
-    icon: 'heart-handshake',
-    desc: 'Offer empathy and understanding reactions to fellow souls',
-    color: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
-  },
-  MIDNIGHT_SOUL: {
-    label: 'Midnight Soul',
-    icon: 'moon',
-    desc: 'Pour your heart out in the silence of late night (00:00 - 04:00)',
-    color: 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300',
-  },
-  CHAIN_WEAVER: {
-    label: 'Chain Weaver',
-    icon: 'link',
-    desc: 'Connect anonymous dialogues in confession threads',
-    color: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
-  },
-  STEALTH_CONFESSOR: {
-    label: 'Stealth Confessor',
-    icon: 'shield-check',
-    desc: 'Share untraceable truths with Zero-Knowledge cryptographic stealth',
-    color: 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300',
-  },
-};
+> = Object.fromEntries(
+  SHARED_BADGES.map((b) => [
+    b.type,
+    { label: b.label, icon: b.icon, desc: b.desc, color: b.color },
+  ]),
+);
+
+// P1 #7: nama publik aman terpusat — bila backend bug mengirim address,
+// UI mana pun tidak boleh membocorkannya (fallback, tanpa log isi).
+export function safeDisplayName(v: unknown, fallback = 'Anonymous #????'): string {
+  if (typeof v !== 'string' || v.length === 0) return fallback;
+  if (/^0x[a-fA-F0-9]{40}$/.test(v)) return fallback;
+  return v;
+}
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000').replace(
   /\/$/,
@@ -84,19 +88,8 @@ export function getLastFeedError(): FeedError | null {
   return lastFeedError;
 }
 
-export const CATEGORIES = [
-  'love',
-  'heartbreak',
-  'secret',
-  'life',
-  'school',
-  'work',
-  'family',
-  'funny',
-  'sad',
-  'deep',
-  'midnight',
-];
+// P1 #11: slug kategori dari SSOT shared (bentuk string[] dipertahankan).
+export const CATEGORIES: string[] = SHARED_CATEGORIES.map((c) => c.slug);
 
 const FALLBACK: FeedItem[] = [
   {
@@ -131,9 +124,8 @@ const FALLBACK: FeedItem[] = [
   },
 ];
 
-export function countChars(s: string): number {
-  return Array.from(s).length;
-}
+// P1 #11: hitung code-point dari SSOT shared (nama export dipertahankan).
+export const countChars: (s: string) => number = sharedCountChars;
 
 export interface FeedResult {
   items: FeedItem[];

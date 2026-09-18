@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/client.js';
@@ -22,19 +23,14 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
   }));
 
   // T1-041: metrics tanpa secret (tanpa isi confession/signature/IP mentah).
-  // AUDIT SEC-001: dilindungi ADMIN_SECRET agar tidak jadi information disclosure.
+  // AUDIT SEC-001 + P1 #6: selalu butuh ADMIN_SECRET (>=32, compare timing-safe).
+  // Tanpa secret → 503, bukan data terbuka.
   app.get('/api/metrics', async (req, reply) => {
-    const secret = process.env.ADMIN_SECRET ?? '';
-    if (secret) {
-      if (req.headers['x-admin-secret'] !== secret) {
-        return reply
-          .code(403)
-          .send({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
-      }
-    } else if (process.env.NODE_ENV === 'production') {
+    if (!checkAdminSecret(req.headers['x-admin-secret'])) {
+      const code = adminSecretConfigured() ? 'FORBIDDEN' : 'ADMIN_DISABLED';
       return reply
-        .code(403)
-        .send({ error: { code: 'FORBIDDEN', message: 'Admin secret not configured.' } });
+        .code(adminSecretConfigured() ? 403 : 503)
+        .send({ error: { code, message: 'Admin access required.' } });
     }
     const db = getDb();
     let queueDepth = 0;
@@ -50,20 +46,29 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // T1H-006: SLO read 99.5% + p95<500ms (window lifetime proses; Prometheus di prod).
-  // AUDIT SEC-001: dilindungi ADMIN_SECRET.
+  // AUDIT SEC-001 + P1 #6: perlindungan sama seperti /metrics.
   app.get('/api/slo', async (req, reply) => {
-    const secret = process.env.ADMIN_SECRET ?? '';
-    if (secret) {
-      if (req.headers['x-admin-secret'] !== secret) {
-        return reply
-          .code(403)
-          .send({ error: { code: 'FORBIDDEN', message: 'Admin access required.' } });
-      }
-    } else if (process.env.NODE_ENV === 'production') {
+    if (!checkAdminSecret(req.headers['x-admin-secret'])) {
+      const code = adminSecretConfigured() ? 'FORBIDDEN' : 'ADMIN_DISABLED';
       return reply
-        .code(403)
-        .send({ error: { code: 'FORBIDDEN', message: 'Admin secret not configured.' } });
+        .code(adminSecretConfigured() ? 403 : 503)
+        .send({ error: { code, message: 'Admin access required.' } });
     }
     return sloSnapshot();
   });
 };
+
+function adminSecretConfigured(): boolean {
+  const s = process.env.ADMIN_SECRET ?? '';
+  return s.length >= 32;
+}
+
+function checkAdminSecret(got: unknown): boolean {
+  const secret = process.env.ADMIN_SECRET ?? '';
+  return (
+    typeof got === 'string' &&
+    secret.length >= 32 &&
+    got.length === secret.length &&
+    timingSafeEqual(Buffer.from(got, 'utf8'), Buffer.from(secret, 'utf8'))
+  );
+}

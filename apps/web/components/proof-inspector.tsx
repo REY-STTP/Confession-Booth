@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '@/lib/booth';
+import { canonicalHashBrowser } from '@/lib/zk';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,6 +28,27 @@ interface ProofData {
   status: string;
   contractAddress: string | null;
   chainId: string;
+  verified?: boolean;
+}
+
+// P1 #8: satu sumber alamat kontrak (env build-time) — tanpa fallback diam-diam.
+const ENV_CONTRACT = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS ?? '').trim();
+const EXPECTED_CHAIN_ID = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111);
+
+function isValidTxHash(v: unknown): v is string {
+  return typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v);
+}
+
+function blockValidFor(v: number | null): boolean {
+  return v === null || (Number.isInteger(v) && v >= 0);
+}
+
+function resolveContractAddress(proofAddr: string | null): string | null {
+  if (proofAddr && /^0x[0-9a-fA-F]{40}$/.test(proofAddr) && !proofAddr.startsWith('0x0000')) {
+    return proofAddr;
+  }
+  if (ENV_CONTRACT && /^0x[0-9a-fA-F]{40}$/.test(ENV_CONTRACT)) return ENV_CONTRACT;
+  return null;
 }
 
 interface ProofInspectorProps {
@@ -41,31 +63,48 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
   const [proof, setProof] = React.useState<ProofData | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [copiedKey, setCopiedKey] = React.useState<string | null>(null);
+  // P1 #8: verifikasi lokal — null = belum dihitung, boolean = hasil banding.
+  const [hashMatch, setHashMatch] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
     if (!isOpen || proof) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setHashMatch(null);
 
-    fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}/proof`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`Status ${res.status}`);
-        return res.json();
-      })
-      .then((data: ProofData) => {
-        if (!cancelled) setProof(data);
-      })
-      .catch((err) => {
+    (async () => {
+      try {
+        const [proofRes, detailRes] = await Promise.all([
+          fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}/proof`),
+          fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}`),
+        ]);
+        if (!proofRes.ok) throw new Error(`Status ${proofRes.status}`);
+        const data = (await proofRes.json()) as ProofData;
+        if (cancelled) return;
+        setProof(data);
+        // Hitung ulang digest kanonis dari konten live lalu bandingkan.
+        try {
+          if (detailRes.ok) {
+            const detail = await detailRes.json();
+            if (typeof detail?.content === 'string' && typeof data.contentHash === 'string') {
+              const local = await canonicalHashBrowser(detail.content);
+              if (!cancelled) setHashMatch(local.toLowerCase() === data.contentHash.toLowerCase());
+            }
+          }
+        } catch {
+          if (!cancelled) setHashMatch(null);
+        }
+      } catch {
         if (!cancelled) {
           setError(
             'On-chain cryptographic proof data is not yet available or is queued in indexing.',
           );
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -179,7 +218,14 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[11px] text-muted-foreground">
                   <Layers className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
-                  <span>Sepolia Testnet (Chain #{proof.chainId})</span>
+                  {/* P1 #8: assert chainId — label Sepolia hanya bila cocok. */}
+                  {Number(proof.chainId) === EXPECTED_CHAIN_ID ? (
+                    <span>Sepolia Testnet (Chain #{proof.chainId})</span>
+                  ) : (
+                    <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-amber-300">
+                      Unexpected network (Chain #{proof.chainId})
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -190,18 +236,30 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                     <Hash className="h-3 w-3 text-primary" />
                     Content Digest (Canonical SHA-256)
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => copyValue('contentHash', proof.contentHash, 'Content Digest')}
-                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {copiedKey === 'contentHash' ? (
-                      <Check className="h-3 w-3 text-emerald-400" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                    <span>{copiedKey === 'contentHash' ? 'Copied' : 'Copy'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* P1 #8: hasil verifikasi lokal (hitung ulang dari konten live). */}
+                    {hashMatch === true ? (
+                      <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] text-emerald-400">
+                        ✓ match
+                      </span>
+                    ) : hashMatch === false ? (
+                      <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 font-mono text-[10px] text-red-400">
+                        ✗ mismatch
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => copyValue('contentHash', proof.contentHash, 'Content Digest')}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {copiedKey === 'contentHash' ? (
+                        <Check className="h-3 w-3 text-emerald-400" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                      <span>{copiedKey === 'contentHash' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="font-mono text-[11px] text-foreground/90 break-all select-all bg-background/60 p-2 rounded border border-border/40">
                   {proof.contentHash}
@@ -229,15 +287,19 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                         )}
                         <span>{copiedKey === 'txHash' ? 'Copied' : 'Copy'}</span>
                       </button>
-                      <a
-                        href={`https://sepolia.etherscan.io/tx/${proof.txHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
-                      >
-                        <span>Etherscan</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
+                      {/* P1 #8: tautan hanya bila format tx valid + encode. */}
+                      {isValidTxHash(proof.txHash) ? (
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${encodeURIComponent(proof.txHash)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="View on Etherscan (opens new tab)"
+                          className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
+                        >
+                          <span>Etherscan</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -251,47 +313,54 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
                 <div className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3">
                   <span className="text-muted-foreground font-medium block">Block Height</span>
                   <p className="font-mono text-xs text-foreground">
-                    {proof.blockNumber ? `#${proof.blockNumber.toLocaleString()}` : 'Pending'}
+                    {blockValidFor(proof.blockNumber)
+                      ? proof.blockNumber
+                        ? `#${proof.blockNumber.toLocaleString()}`
+                        : 'Pending'
+                      : 'Invalid'}
                   </p>
                 </div>
 
                 {(() => {
-                  const contractAddr =
-                    proof.contractAddress && !proof.contractAddress.startsWith('0x0000')
-                      ? proof.contractAddress
-                      : '0xa8302048773DD213B9D311c2abda199B14339188';
+                  // P1 #8: satu sumber (API → env), tanpa fallback diam-diam.
+                  const contractAddr = resolveContractAddress(proof.contractAddress);
                   return (
                     <div className="space-y-1 rounded-lg border border-border/60 bg-card/60 p-3">
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground font-medium block">
                           Contract Address
                         </span>
-                        <div className="flex items-center gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => copyValue('contract', contractAddr, 'Contract Address')}
-                            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            {copiedKey === 'contract' ? (
-                              <Check className="h-3 w-3 text-emerald-400" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                            <span>{copiedKey === 'contract' ? 'Copied' : 'Copy'}</span>
-                          </button>
-                          <a
-                            href={`https://sepolia.etherscan.io/address/${contractAddr}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
-                          >
-                            <span>Etherscan</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
+                        {contractAddr ? (
+                          <div className="flex items-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                copyValue('contract', contractAddr, 'Contract Address')
+                              }
+                              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {copiedKey === 'contract' ? (
+                                <Check className="h-3 w-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                              <span>{copiedKey === 'contract' ? 'Copied' : 'Copy'}</span>
+                            </button>
+                            <a
+                              href={`https://sepolia.etherscan.io/address/${encodeURIComponent(contractAddr)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="View on Etherscan (opens new tab)"
+                              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-medium"
+                            >
+                              <span>Etherscan</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        ) : null}
                       </div>
                       <p className="font-mono text-[11px] text-foreground break-all select-all">
-                        {contractAddr}
+                        {contractAddr ?? 'Not configured'}
                       </p>
                     </div>
                   );

@@ -232,6 +232,9 @@ export const reports = pgTable(
     status: reportStatus('status').notNull().default('OPEN'),
     createdAt: ts('created_at').notNull().defaultNow(),
     resolvedAt: ts('resolved_at'),
+    // P1 #9: hash IP pelapor anonim — dedup per-IP agar satu anon tidak
+    // memblokir anon lain untuk target+reason yang sama.
+    reporterIpHash: varchar('reporter_ip_hash', { length: 128 }),
   },
   (t) => [
     index('idx_reports_status').on(t.status, t.createdAt),
@@ -239,6 +242,7 @@ export const reports = pgTable(
     // Polymorphic FK tidak didukung langsung, gunakan partial index + application-level enforcement
     // Index untuk performa query moderation queue
     index('idx_reports_target').on(t.targetType, t.targetId),
+    index('idx_reports_iphash').on(t.reporterIpHash, t.targetId, t.reasonCode, t.createdAt),
   ],
 );
 
@@ -357,11 +361,16 @@ export const identityCommitments = pgTable(
   'identity_commitments',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // P1 #7: pemilik komitmen — cap per-user + UNIQUE(user, commitment).
+    userId: uuid('user_id').references(() => users.id),
     commitment: varchar('commitment', { length: 128 }).notNull().unique(),
     leafIndex: serial('leaf_index').notNull().unique(),
     createdAt: ts('created_at').notNull().defaultNow(),
   },
-  (t) => [index('idx_commitments_index').on(t.leafIndex)],
+  (t) => [
+    index('idx_commitments_index').on(t.leafIndex),
+    uniqueIndex('uq_commitment_owner').on(t.userId, t.commitment),
+  ],
 );
 
 export const epochNullifiers = pgTable(

@@ -62,12 +62,12 @@ export async function withIdempotency<T>(
     // Return body langsung (bukan wrapper) agar konsisten dengan replay
     return { replay: false, statusCode: out.statusCode, body: out.body };
   } catch (e) {
-    // Hanya 23505 (unique violation) yang berarti kalah balapan.
-    // Error lain (FK, koneksi) wajib dilempar asli agar tidak menyesatkan.
+    // P1 #10: hanya 23505 (unique violation) yang berarti kalah balapan.
+    // Error lain (FK, koneksi, code tak dikenal) wajib dilempar asli.
     const code =
       (e as { cause?: { code?: string }; code?: string })?.cause?.code ??
       (e as { code?: string })?.code;
-    if (code !== undefined && code !== '23505') throw e;
+    if (code !== '23505') throw e;
     // Kalah balapan: baca milik pemenang.
     const winner = await db
       .select()

@@ -21,6 +21,7 @@ interface SessionCtx {
   enter: () => Promise<void>;
   logout: () => Promise<void>;
   getOrRequestSignature: () => Promise<string>;
+  clearSignature: () => void;
 }
 
 const Ctx = createContext<SessionCtx>({
@@ -31,6 +32,7 @@ const Ctx = createContext<SessionCtx>({
   enter: async () => {},
   logout: async () => {},
   getOrRequestSignature: async () => '',
+  clearSignature: () => {},
 });
 
 export function useSession(): SessionCtx {
@@ -142,7 +144,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
     const address = accounts?.[0];
     if (!address) throw new Error('No wallet address found.');
-    const zkMsg = `Confession Booth Zero-Knowledge Stealth Key\n\nSign this message to derive your unlinkable anonymous identity. This costs no gas and is never broadcast.`;
+    // P1 #7: pesan ZK diikat ke address + chain + waktu (bukan template statis),
+    // agar identitas turunan tidak bisa dipindahkan lintas akun/jaringan.
+    const chainHex = (await eth.request({ method: 'eth_chainId' }).catch(() => null)) as
+      string | null;
+    const chainId = chainHex
+      ? parseInt(chainHex, 16)
+      : Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111);
+    const zkMsg =
+      `Confession Booth Zero-Knowledge Stealth Key\n\n` +
+      `Sign this message to derive your unlinkable anonymous identity. This costs no gas and is never broadcast.\n\n` +
+      `Address: ${address}\nChain ID: ${chainId}\nIssued At: ${new Date().toISOString()}`;
     const sig = (await eth.request({
       method: 'personal_sign',
       params: [zkMsg, address],
@@ -150,6 +162,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSignature(sig);
     return sig;
   }, [signature]);
+
+  // P1 #7: hapus signature dari RAM setelah publish (root identitas sekali pakai).
+  const clearSignature = useCallback(() => {
+    setSignature(null);
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -167,8 +184,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [accessToken]);
 
   const value = useMemo(
-    () => ({ state, accessToken, signature, error, enter, logout, getOrRequestSignature }),
-    [state, accessToken, signature, error, enter, logout, getOrRequestSignature],
+    () => ({
+      state,
+      accessToken,
+      signature,
+      error,
+      enter,
+      logout,
+      getOrRequestSignature,
+      clearSignature,
+    }),
+    [state, accessToken, signature, error, enter, logout, getOrRequestSignature, clearSignature],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

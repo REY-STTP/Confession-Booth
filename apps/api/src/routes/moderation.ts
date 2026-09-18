@@ -1,12 +1,13 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { config } from '../config.js';
 import { feedCacheInvalidate } from '../cache.js';
 import { snippet } from '../content.js';
+import { AuthError } from '../auth.js';
 import { isReason } from '../validate.js';
 import { rowsOf, rateLimitOr429, requireRole, CRITICAL_REASONS } from './common.js';
 
@@ -28,7 +29,17 @@ const modActionBody = z.object({
     .regex(/^(c|w)_[A-Za-z0-9_-]+$/)
     .min(3)
     .max(64),
-  action: z.enum(['DISMISS', 'HIDE', 'REMOVE', 'RESTRICT', 'BAN', 'RESTORE']),
+  // P1 #9: UNBAN/UNRESTRICT mengembalikan status user ke ACTIVE.
+  action: z.enum([
+    'DISMISS',
+    'HIDE',
+    'REMOVE',
+    'RESTRICT',
+    'BAN',
+    'RESTORE',
+    'UNBAN',
+    'UNRESTRICT',
+  ]),
   reason_code: z.string().min(1).max(32),
   notes: z.string().max(2000).optional(),
   policy_version: z.string().min(1).max(32),
@@ -76,7 +87,11 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Target not found.' } });
     }
 
-    // T1-027: throttle spam report sama (subject sama → target sama dalam 10 mnt).
+    // P1 #9: throttle anonim per-IP-hash — satu anon tidak bisa memblokir
+    // semua anon lain untuk target+reason yang sama.
+    const reporterIpHash = reporterId
+      ? null
+      : createHash('sha256').update(`booth-report:${req.ip}`, 'utf8').digest('hex');
     const recentDup = rowsOf<{ one: number }>(
       reporterId
         ? await db.execute(sql`
@@ -87,7 +102,8 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
         : await db.execute(sql`
           SELECT 1 AS one FROM reports
           WHERE reporter_user_id IS NULL AND target_id = ${target.id}::uuid
-            AND reason_code = ${reason} AND created_at > now() - interval '10 minutes' LIMIT 1
+            AND reason_code = ${reason} AND reporter_ip_hash = ${reporterIpHash}
+            AND created_at > now() - interval '10 minutes' LIMIT 1
         `),
     );
     if (recentDup.length > 0) {
@@ -98,8 +114,8 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
 
     const ins = rowsOf<{ id: string }>(
       await db.execute(sql`
-        INSERT INTO reports (reporter_user_id, target_type, target_id, reason_code, details, status)
-        VALUES (${reporterId}::uuid, ${targetType}::report_target, ${target.id}::uuid, ${reason}, ${details ?? null}, 'OPEN')
+        INSERT INTO reports (reporter_user_id, reporter_ip_hash, target_type, target_id, reason_code, details, status)
+        VALUES (${reporterId}::uuid, ${reporterIpHash}, ${targetType}::report_target, ${target.id}::uuid, ${reason}, ${details ?? null}, 'OPEN')
         RETURNING id
       `),
     );
@@ -227,56 +243,113 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Target not found.' } });
     }
 
-    await db.transaction(async (tx) => {
-      if (targetType === 'CONFESSION') {
-        if (action === 'HIDE' || action === 'REMOVE') {
-          await tx
-            .update(schema.confessions)
-            .set({ status: action === 'HIDE' ? 'HIDDEN' : 'REMOVED', hiddenAt: new Date() })
-            .where(eq(schema.confessions.id, target.id));
-        } else if (action === 'RESTORE') {
-          await tx
-            .update(schema.confessions)
-            .set({ status: 'VISIBLE', hiddenAt: null })
-            .where(eq(schema.confessions.id, target.id));
+    try {
+      await db.transaction(async (tx) => {
+        if (targetType === 'CONFESSION') {
+          if (action === 'HIDE' || action === 'REMOVE') {
+            await tx
+              .update(schema.confessions)
+              .set({ status: action === 'HIDE' ? 'HIDDEN' : 'REMOVED', hiddenAt: new Date() })
+              .where(eq(schema.confessions.id, target.id));
+          } else if (action === 'RESTORE') {
+            // P1 #9: RESTORE hanya dari HIDDEN/QUARANTINED — jangan hidupkan
+            // putusan final REMOVED atau konten PENDING.
+            const restored = await tx
+              .update(schema.confessions)
+              .set({ status: 'VISIBLE', hiddenAt: null })
+              .where(
+                and(
+                  eq(schema.confessions.id, target.id),
+                  inArray(schema.confessions.status, ['HIDDEN', 'QUARANTINED']),
+                ),
+              )
+              .returning({ id: schema.confessions.id });
+            if (restored.length === 0) {
+              throw new AuthError('INVALID_TRANSITION', 'Target cannot be restored.', 409);
+            }
+          }
+        } else {
+          if (action === 'HIDE' || action === 'REMOVE') {
+            await tx
+              .update(schema.whispers)
+              .set({ status: action === 'HIDE' ? 'HIDDEN' : 'REMOVED' })
+              .where(eq(schema.whispers.id, target.id));
+          } else if (action === 'RESTORE') {
+            const restored = await tx
+              .update(schema.whispers)
+              .set({ status: 'VISIBLE' })
+              .where(
+                and(
+                  eq(schema.whispers.id, target.id),
+                  inArray(schema.whispers.status, ['HIDDEN', 'QUARANTINED']),
+                ),
+              )
+              .returning({ id: schema.whispers.id });
+            if (restored.length === 0) {
+              throw new AuthError('INVALID_TRANSITION', 'Target cannot be restored.', 409);
+            }
+          }
         }
-      } else {
-        if (action === 'HIDE' || action === 'REMOVE') {
+        if ((action === 'RESTRICT' || action === 'BAN') && target.authorUserId) {
           await tx
-            .update(schema.whispers)
-            .set({ status: action === 'HIDE' ? 'HIDDEN' : 'REMOVED' })
-            .where(eq(schema.whispers.id, target.id));
-        } else if (action === 'RESTORE') {
-          await tx
-            .update(schema.whispers)
-            .set({ status: 'VISIBLE' })
-            .where(eq(schema.whispers.id, target.id));
+            .update(schema.users)
+            .set({ status: action === 'BAN' ? 'BANNED' : 'RESTRICTED' })
+            .where(eq(schema.users.id, target.authorUserId));
         }
-      }
-      if ((action === 'RESTRICT' || action === 'BAN') && target.authorUserId) {
+        // P1 #9: UNBAN/UNRESTRICT mengembalikan akun ke ACTIVE.
+        if ((action === 'UNBAN' || action === 'UNRESTRICT') && target.authorUserId) {
+          await tx
+            .update(schema.users)
+            .set({ status: 'ACTIVE' })
+            .where(eq(schema.users.id, target.authorUserId));
+        }
+        // P1 #9: enum kolom mod_action tak mengenal UNBAN/UNRESTRICT (tanpa migrasi
+        // enum) — audit dicatat sebagai RESTORE dengan notes eksplisit.
+        const auditAction = action === 'UNBAN' || action === 'UNRESTRICT' ? 'RESTORE' : action;
+        const auditNotes =
+          action === 'UNBAN' || action === 'UNRESTRICT'
+            ? `${action} account via moderation API${notes ? `: ${notes}` : ''}`.slice(0, 2000)
+            : (notes ?? null);
+        await tx.insert(schema.moderationActions).values({
+          moderatorUserId: req.user!.id,
+          targetType,
+          targetId: target.id,
+          action: auditAction,
+          reasonCode: reason_code,
+          notes: auditNotes,
+          policyVersion: policy_version,
+        });
+        // P1 #9: resolve hanya laporan dengan reason yang ditindak — bukan semua
+        // reason untuk target yang sama.
         await tx
-          .update(schema.users)
-          .set({ status: action === 'BAN' ? 'BANNED' : 'RESTRICTED' })
-          .where(eq(schema.users.id, target.authorUserId));
-      }
-      await tx.insert(schema.moderationActions).values({
-        moderatorUserId: req.user!.id,
-        targetType,
-        targetId: target.id,
-        action,
-        reasonCode: reason_code,
-        notes: notes ?? null,
-        policyVersion: policy_version,
+          .update(schema.reports)
+          .set({ status: action === 'DISMISS' ? 'DISMISSED' : 'RESOLVED', resolvedAt: new Date() })
+          .where(
+            and(
+              eq(schema.reports.targetId, target.id),
+              eq(schema.reports.status, 'OPEN'),
+              eq(schema.reports.reasonCode, reason_code),
+            ),
+          );
+        await tx
+          .update(schema.reports)
+          .set({ status: action === 'DISMISS' ? 'DISMISSED' : 'RESOLVED', resolvedAt: new Date() })
+          .where(
+            and(
+              eq(schema.reports.targetId, target.id),
+              eq(schema.reports.status, 'REVIEWING'),
+              eq(schema.reports.reasonCode, reason_code),
+            ),
+          );
       });
-      await tx
-        .update(schema.reports)
-        .set({ status: action === 'DISMISS' ? 'DISMISSED' : 'RESOLVED', resolvedAt: new Date() })
-        .where(and(eq(schema.reports.targetId, target.id), eq(schema.reports.status, 'OPEN')));
-      await tx
-        .update(schema.reports)
-        .set({ status: action === 'DISMISS' ? 'DISMISSED' : 'RESOLVED', resolvedAt: new Date() })
-        .where(and(eq(schema.reports.targetId, target.id), eq(schema.reports.status, 'REVIEWING')));
-    });
+    } catch (e) {
+      if (e instanceof AuthError && e.code === 'INVALID_TRANSITION') {
+        return reply
+          .code(409)
+          .send({ error: { code: 'INVALID_TRANSITION', message: 'Target cannot be restored.' } });
+      }
+      throw e;
+    }
 
     await feedCacheInvalidate().catch((err) => app.log.error(err, 'feedCacheInvalidate failed'));
     return { ok: true };

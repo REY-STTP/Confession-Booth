@@ -24,7 +24,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: true,
     bodyLimit,
-    trustProxy: true,
+    // P1 #6: trustProxy eksplisit dari config (default false — anti IP spoof).
+    trustProxy: config.trustProxy,
     routerOptions: { maxParamLength: 128 },
   });
 

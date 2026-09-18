@@ -1,5 +1,4 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
 import { and, eq, sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/client.js';
@@ -18,7 +17,13 @@ import {
 } from '../content.js';
 import { checkContent, isCategory, isReaction, CONFESSION_MAX } from '../validate.js';
 import { AuthError } from '../auth.js';
-import { buildMerkleTree, verifyAnonymousSignalProof } from '@booth/shared';
+// P1 #11: payload schemas dari SSOT shared (bukan Zod lokal per-route).
+import {
+  buildMerkleTree,
+  confessSchema,
+  reactSchema,
+  verifyAnonymousSignalProof,
+} from '@booth/shared';
 import { withIdempotency } from '../idempotency.js';
 import {
   type Db,
@@ -34,6 +39,31 @@ import {
   whisperCountMap,
   feedQuery,
 } from './common.js';
+
+/** P1 #13: peta confessionId → tipe reaksi milik pembaca (kosong bila anon). */
+async function reactedByMeMap(
+  db: Db,
+  userId: string | undefined,
+  ids: string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (!userId || ids.length === 0) return map;
+  const rows = rowsOf<{ confession_id: string; reaction_type: string }>(
+    await db.execute(sql`
+      SELECT confession_id, reaction_type FROM reactions
+      WHERE confession_id IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}) AND user_id = ${userId}::uuid
+    `),
+  );
+  for (const r of rows) {
+    const e = map.get(r.confession_id) ?? [];
+    e.push(r.reaction_type);
+    map.set(r.confession_id, e);
+  }
+  return map;
+}
 
 export async function findConfession(
   db: Db,
@@ -52,25 +82,7 @@ export async function findConfession(
   return rows[0] ?? null;
 }
 
-const HEX64 = z.string().regex(/^[0-9a-fA-F]{64}$/);
-
-const confessBody = z.object({
-  category: z.string().min(1).max(64),
-  content: z.string().min(1).max(2000),
-  roomSlug: z.string().min(1).max(64).optional(),
-  badgeType: z.string().min(1).max(64).optional(),
-  zkProof: z
-    .object({
-      // P0 #1: format hex ketat — hash 64 char, proof 64–256 char, epoch bounded.
-      merkleRoot: HEX64,
-      nullifierHash: HEX64,
-      epoch: z.number().int().min(0).max(999999999),
-      scope: z.literal('confess'),
-      signal: HEX64,
-      proof: z.string().regex(/^[0-9a-fA-F]{64,256}$/),
-    })
-    .optional(),
-});
+// P1 #11: confessBody/reactBody pindah ke @booth/shared (confessSchema/reactSchema).
 
 /** P0 #1: stub proof mock hanya diizinkan bila eksplisit (ZK_MOCK=true) atau non-prod.
  *  Prod tanpa ZK_MOCK=true → tolak sampai verifier Groth16 nyata tersedia. */
@@ -81,7 +93,8 @@ function isZkMockAllowed(): boolean {
   return process.env.NODE_ENV !== 'production';
 }
 
-const reactBody = z.object({ type: z.string().min(1).max(32) });
+const confessBody = confessSchema;
+const reactBody = reactSchema;
 
 export const confessionRoutes: FastifyPluginAsync = async (app) => {
   // --- Feed (T1-011): hanya VISIBLE, proyeksi publik SCHEMA §17. ---
@@ -145,7 +158,10 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
     const page = rows.slice(0, limit);
     const ids = page.map((r) => r.id);
     const [rmap, wmap] = await Promise.all([reactionMap(db, ids), whisperCountMap(db, ids)]);
-    const items = page.map((r) => projectConfession(r, rmap.get(r.id) ?? {}, wmap.get(r.id) ?? 0));
+    const mine = await reactedByMeMap(db, req.user?.id, ids);
+    const items = page.map((r) =>
+      projectConfession(r, rmap.get(r.id) ?? {}, wmap.get(r.id) ?? 0, mine.get(r.id)),
+    );
     const last = page[page.length - 1];
     const out = {
       items,
@@ -172,7 +188,13 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
       reactionMap(db, [found.id]),
       whisperCountMap(db, [found.id]),
     ]);
-    return projectConfession(found, rmap.get(found.id) ?? {}, wmap.get(found.id) ?? 0);
+    const mine = await reactedByMeMap(db, req.user?.id, [found.id]);
+    return projectConfession(
+      found,
+      rmap.get(found.id) ?? {},
+      wmap.get(found.id) ?? 0,
+      mine.get(found.id),
+    );
   });
 
   app.get('/api/confessions/:publicId/proof', async (req, reply) => {

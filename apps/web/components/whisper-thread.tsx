@@ -1,7 +1,7 @@
 'use client';
 
 import { Reply, Clock, ShieldAlert, MessageSquare } from 'lucide-react';
-import { timeAgo, type WhisperItem, BADGE_META } from '@/lib/booth';
+import { timeAgo, type WhisperItem, BADGE_META, safeDisplayName } from '@/lib/booth';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { BrandMark } from '@/components/brand-mark';
@@ -43,7 +43,7 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
           <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-foreground tracking-tight">
-                {w.author.displayName}
+                {safeDisplayName(w.author.displayName)}
               </span>
 
               {/* OP Badge */}
@@ -103,7 +103,7 @@ export function WhisperThread({ whispers, onReply, replyTo, className }: Whisper
           <div className="mt-3 flex items-center justify-between pt-2 border-t border-border/40 text-xs">
             <button
               type="button"
-              onClick={() => onReply({ id: w.id, author: w.author.displayName })}
+              onClick={() => onReply({ id: w.id, author: safeDisplayName(w.author.displayName) })}
               className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors text-xs font-medium"
             >
               <Reply className="h-3.5 w-3.5" aria-hidden="true" />

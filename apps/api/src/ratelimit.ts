@@ -17,6 +17,7 @@ export const LIMITS = {
   react: { limit: 60, windowMs: 3600_000 },
   report: { limit: 10, windowMs: 3600_000 },
   admin: { limit: 10, windowMs: 10 * 60_000 },
+  zkRegister: { limit: 10, windowMs: 3600_000 },
 } as const;
 
 export type RateAction = keyof typeof LIMITS;

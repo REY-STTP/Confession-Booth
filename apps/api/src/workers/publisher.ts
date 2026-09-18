@@ -6,6 +6,7 @@
 
 import type { Hex } from 'viem';
 import { sql } from 'drizzle-orm';
+import { PROTOCOL_VERSION } from '@booth/shared';
 import { getDb } from '../db/client.js';
 import { config } from '../config.js';
 import {
@@ -139,7 +140,12 @@ export async function publisherTick(
           address: contractAddress,
           abi: REGISTRY_ABI,
           functionName: 'publish',
-          args: [toBytes32(p.onchain_confession_id), toBytes32(p.content_hash), '', 1],
+          args: [
+            toBytes32(p.onchain_confession_id),
+            toBytes32(p.content_hash),
+            '',
+            PROTOCOL_VERSION,
+          ],
           nonce,
           ...gasPriceConfig,
         });

@@ -20,19 +20,28 @@ describe('privacy: metrics + error tanpa identitas (T1-050)', () => {
     assert.deepEqual(leaks, []);
     assert.ok(!JSON.stringify(res.json()).includes('booth_refresh'));
   });
-  it('/api/metrics menolak akses tanpa x-admin-secret (SEC-001)', async () => {
+  it('/api/metrics menolak akses tanpa x-admin-secret (SEC-001 + P1 #6: min 32 char)', async () => {
     const prevSecret = process.env.ADMIN_SECRET;
     try {
-      process.env.ADMIN_SECRET = 'temp-test-admin-secret-xyz';
+      process.env.ADMIN_SECRET = 'temp-test-admin-secret-xyz-000000';
       const res = await app.inject({ method: 'GET', url: '/api/metrics' });
       assert.equal(res.statusCode, 403);
 
       const okRes = await app.inject({
         method: 'GET',
         url: '/api/metrics',
-        headers: { 'x-admin-secret': 'temp-test-admin-secret-xyz' },
+        headers: { 'x-admin-secret': 'temp-test-admin-secret-xyz-000000' },
       });
       assert.equal(okRes.statusCode, 200);
+
+      // Secret pendek (<32) = tidak terkonfigurasi → 503 walau header cocok.
+      process.env.ADMIN_SECRET = 'short';
+      const weak = await app.inject({
+        method: 'GET',
+        url: '/api/metrics',
+        headers: { 'x-admin-secret': 'short' },
+      });
+      assert.equal(weak.statusCode, 503);
     } finally {
       if (prevSecret !== undefined) {
         process.env.ADMIN_SECRET = prevSecret;

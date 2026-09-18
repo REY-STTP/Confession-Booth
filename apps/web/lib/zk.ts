@@ -2,6 +2,10 @@
  * Browser-safe cryptographic utilities for Fase 2 ZK Anonymous Credentials.
  * Uses Web Crypto API (SubtleCrypto) supported natively in all modern browsers.
  */
+// P1 #11: normalisasi dari SSOT shared (hapus duplikat lokal).
+import { normalizeForDedup } from '@booth/shared/constants';
+
+export { normalizeForDedup };
 
 export const EPOCH_DURATION_MS = 3_600_000; // 1 jam per epoch
 
@@ -104,10 +108,6 @@ export async function getMerkleProofBrowser(
     path,
     indices,
   };
-}
-
-export function normalizeForDedup(s: string): string {
-  return s.normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 export async function canonicalHashBrowser(body: string): Promise<string> {

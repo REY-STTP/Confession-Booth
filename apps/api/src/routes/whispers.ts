@@ -5,6 +5,8 @@ import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { getStorage } from '../storage.js';
 import { canonicalHash, displayName, newDisplaySeed, newPublicId } from '../content.js';
+// P1 #11: whisper schema dari SSOT shared.
+import { whisperSchema } from '@booth/shared';
 import { checkContent, WHISPER_MAX } from '../validate.js';
 import { withIdempotency } from '../idempotency.js';
 import {
@@ -18,11 +20,7 @@ import {
 } from './common.js';
 import { findConfession } from './confessions.js';
 
-const whisperBody = z.object({
-  content: z.string().min(1).max(2000),
-  parentWhisperId: z.string().min(3).max(64).optional(),
-  badgeType: z.string().min(1).max(64).optional(),
-});
+const whisperBody = whisperSchema;
 
 export const whisperRoutes: FastifyPluginAsync = async (app) => {
   // --- Whispers (T1-013 & T3-001 Confession Chains) ---

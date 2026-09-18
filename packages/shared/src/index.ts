@@ -2,93 +2,55 @@
 // Dipakai web (validasi client) dan api (validasi server — JANGAN percaya client).
 
 import { createHash, randomInt } from 'node:crypto';
+import {
+  CONFESSION_MAX,
+  CONFESSION_MIN,
+  REPORT_DETAILS_MAX,
+  WHISPER_MAX,
+  WHISPER_MIN,
+  countChars,
+  normalizeContent,
+  normalizeForDedup,
+} from './constants.js';
 
-export const CONFESSION_MIN = 1;
-export const CONFESSION_MAX = 500;
-export const WHISPER_MIN = 1;
-export const WHISPER_MAX = 300;
-export const REPORT_DETAILS_MAX = 500;
+// P1 #11: konstanta kanonis pindah ke ./constants.js (browser-safe) —
+// diimpor ulang agar `import {...} from '@booth/shared'` tak berubah.
+export {
+  CONFESSION_MIN,
+  CONFESSION_MAX,
+  WHISPER_MIN,
+  WHISPER_MAX,
+  REPORT_DETAILS_MAX,
+  PROTOCOL_VERSION,
+  CATEGORIES,
+  CATEGORY_SLUGS,
+  isCategorySlug,
+  REACTIONS,
+  REACTION_TYPES,
+  isReactionType,
+  REPORT_REASONS,
+  REPORT_REASON_SET,
+  isReportReason,
+  MODERATION_ACTIONS,
+  BADGES,
+  BADGE_TYPES,
+  isBadgeType,
+  countChars,
+  normalizeContent,
+  normalizeForDedup,
+} from './constants.js';
+export type { BadgeType, CategorySlug, ReactionType, ReportReasonCode } from './constants.js';
+export * from './schemas.js';
 
-export const CATEGORIES = [
-  { slug: 'love', name: 'Love', sort_order: 1 },
-  { slug: 'heartbreak', name: 'Heartbreak', sort_order: 2 },
-  { slug: 'secret', name: 'Secret', sort_order: 3 },
-  { slug: 'life', name: 'Life', sort_order: 4 },
-  { slug: 'school', name: 'School', sort_order: 5 },
-  { slug: 'work', name: 'Work', sort_order: 6 },
-  { slug: 'family', name: 'Family', sort_order: 7 },
-  { slug: 'funny', name: 'Funny', sort_order: 8 },
-  { slug: 'sad', name: 'Sad', sort_order: 9 },
-  { slug: 'deep', name: 'Deep', sort_order: 10 },
-  { slug: 'midnight', name: 'Midnight', sort_order: 11 },
-] as const;
-
-export type CategorySlug = (typeof CATEGORIES)[number]['slug'];
-export const CATEGORY_SLUGS = new Set<string>(CATEGORIES.map((c) => c.slug));
-export function isCategorySlug(v: unknown): v is CategorySlug {
-  return typeof v === 'string' && CATEGORY_SLUGS.has(v);
+/** Hash kanonis konten: sha256(normalizeForDedup) — SATU-SATUNYA fungsi hash
+ *  konten (P1 #11 S2). Dipakai contentHash on-chain + dedup + storage. */
+export function canonicalHash(s: string): string {
+  return createHash('sha256').update(normalizeForDedup(s), 'utf8').digest('hex');
 }
 
-export const REACTIONS = [
-  { type: 'UNDERSTAND', emoji: '🕯️', label: 'I understand' },
-  { type: 'LOVE', emoji: '❤️', label: 'Sending love' },
-  { type: 'SAD', emoji: '😭', label: 'I feel this' },
-  { type: 'WILD', emoji: '💀', label: "That's wild" },
-  { type: 'FUNNY', emoji: '😂', label: "I shouldn't laugh" },
-] as const;
-
-export type ReactionType = (typeof REACTIONS)[number]['type'];
-export const REACTION_TYPES = new Set<string>(REACTIONS.map((r) => r.type));
-export function isReactionType(v: unknown): v is ReactionType {
-  return typeof v === 'string' && REACTION_TYPES.has(v);
-}
-
-export const REPORT_REASONS = [
-  'SPAM',
-  'HARASSMENT',
-  'HATE',
-  'THREAT',
-  'DOXXING',
-  'SEXUAL_EXPLOITATION',
-  'SELF_HARM',
-  'FRAUD',
-  'MALWARE',
-  'ILLEGAL_ACTIVITY',
-  'OTHER',
-] as const;
-export type ReportReasonCode = (typeof REPORT_REASONS)[number];
-export const REPORT_REASON_SET = new Set<string>(REPORT_REASONS);
-export function isReportReason(v: unknown): v is ReportReasonCode {
-  return typeof v === 'string' && REPORT_REASON_SET.has(v);
-}
-
-export const MODERATION_ACTIONS = [
-  'DISMISS',
-  'HIDE',
-  'REMOVE',
-  'RESTRICT',
-  'BAN',
-  'RESTORE',
-] as const;
-
-/** Hitung karakter Unicode (code point) — benar untuk emoji/ZWJ. */
-export function countChars(s: string): number {
-  return Array.from(s ?? '').length;
-}
-
-/** Normalisasi kanonis: NFC + collapse whitespace + trim. */
-export function normalizeContent(s: string): string {
-  return (s ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
-}
-
-/** Normalisasi untuk deteksi duplikat: lowercase + collapse + trim. */
-export function normalizeForDedup(s: string): string {
-  return normalizeContent(s).toLowerCase();
-}
-
-/** sha256 hex dari konten kanonis. Dipakai untuk contentHash + dedup. */
+/** Alias historis (dulu case-sensitive) — kini kanonis, jangan dipakai baru. */
 export function hashContent(s: string): string {
-  return createHash('sha256').update(normalizeContent(s), 'utf8').digest('hex');
+  return canonicalHash(s);
 }
 
 /** Nama anonim per-confession (acak) — cegah korelasi antar-posting user sama. */
