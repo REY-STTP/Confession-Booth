@@ -55,6 +55,23 @@ describe('privacy: metrics + error tanpa identitas (T1-050)', () => {
     assert.ok(!/0x[a-fA-F0-9]{40}/.test(s));
     assert.ok(!/booth_refresh|signature|mnemonic/i.test(s));
   });
+  it('P2 #15: /api/metrics?format=prom exposition valid + tetap butuh secret', async () => {
+    const secret = process.env.ADMIN_SECRET;
+    assert.ok(secret && secret.length >= 32);
+    const denied = await app.inject({ method: 'GET', url: '/api/metrics?format=prom' });
+    assert.equal(denied.statusCode, 403);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/metrics?format=prom',
+      headers: { 'x-admin-secret': secret },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.headers['content-type']?.includes('text/plain'));
+    const body = res.body as string;
+    assert.ok(body.includes('booth_requests_total'));
+    assert.ok(body.includes('booth_alert'));
+    assert.ok(!/0x[a-fA-F0-9]{40}/.test(body));
+  });
   it('404/400 tanpa stack trace', async () => {
     const nf = await app.inject({ method: 'GET', url: '/api/tidak-ada-e2e' });
     assert.equal(nf.statusCode, 404);

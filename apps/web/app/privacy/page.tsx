@@ -70,6 +70,22 @@ export default function PrivacyPage() {
             histories, RPC/network metadata, and behavioral patterns can still create correlation
             risks.
           </p>
+          {/* P2 #20: batas unlinkability yang jujur dan eksplisit. */}
+          <ul className="list-disc pl-5 space-y-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+            <li>
+              <strong>Whispers &amp; reactions are pseudonymous, not zero-knowledge:</strong> they
+              are sent under your session and stay linkable on the server, even though the public
+              sees only anonymous names.
+            </li>
+            <li>
+              <strong>OP badges shrink the anonymity set:</strong> replies marked as the original
+              poster reveal authorship correlation to observers.
+            </li>
+            <li>
+              <strong>Content hashes are deterministic:</strong> very short confessions could be
+              brute-forced by anyone comparing hashes.
+            </li>
+          </ul>
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
             <strong>Important Warning:</strong> Never write names, locations, phone numbers, or
             unique details that could easily identify you or someone else.

@@ -114,17 +114,20 @@ cp .env.example .env
 
 Key environment variables:
 
-| Variable                       | Description                                            | Default / Example                             |
-| :----------------------------- | :----------------------------------------------------- | :-------------------------------------------- |
-| `DATABASE_URL`                 | PostgreSQL connection URI                              | `postgres://booth:booth@localhost:5432/booth` |
-| `NEXT_PUBLIC_APP_URL`          | Frontend URL                                           | `http://localhost:3000`                       |
-| `NEXT_PUBLIC_API_URL`          | Backend Fastify API URL                                | `http://localhost:4000`                       |
-| `NEXT_PUBLIC_CHAIN_ID`         | Ethereum Chain ID (Sepolia)                            | `11155111`                                    |
-| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Sepolia ConfessionRegistry Address                     | `0xa8302048773DD213B9D311c2abda199B14339188`  |
-| `SESSION_SECRET`               | 32+ character random string for JWT / sessions         | `change-me-min-32-chars-in-production`        |
-| `ADMIN_SECRET`                 | Secret token for administrative health & metric routes | `change-me-admin-only`                        |
-| `POW_DIFFICULTY`               | Client-side Proof-of-Work difficulty bits (anti-spam)  | `14`                                          |
-| `CORS_ORIGIN`                  | Allowed CORS origins for API requests                  | `http://localhost:3000`                       |
+| Variable                       | Description                                                          | Default / Example                             |
+| :----------------------------- | :------------------------------------------------------------------- | :-------------------------------------------- |
+| `DATABASE_URL`                 | PostgreSQL connection URI                                            | `postgres://booth:booth@localhost:5432/booth` |
+| `NEXT_PUBLIC_APP_URL`          | Frontend URL                                                         | `http://localhost:3000`                       |
+| `NEXT_PUBLIC_API_URL`          | Backend Fastify API URL                                              | `http://localhost:4000`                       |
+| `NEXT_PUBLIC_CHAIN_ID`         | Ethereum Chain ID (Sepolia)                                          | `11155111`                                    |
+| `NEXT_PUBLIC_CONTRACT_ADDRESS` | Sepolia ConfessionRegistry Address                                   | `0x015a0018bCefd2604833D9f7B9f5D439aaCaaAB0`  |
+| `SESSION_SECRET`               | 32+ character random string for JWT / sessions                       | `change-me-min-32-chars-in-production`        |
+| `ADMIN_SECRET`                 | Secret token for administrative health & metric routes               | `change-me-admin-only`                        |
+| `ADMIN_GRANT_ENABLED`          | Set `false` after first admin bootstrap to close grant-role          | `true`                                        |
+| `ZK_MOCK`                      | Allow mock anonymous proofs (dev/staging only; prod must be `false`) | `false`                                       |
+| `TRUST_PROXY`                  | Set `true` only behind a trusted LB/reverse proxy                    | (unset)                                       |
+| `POW_DIFFICULTY`               | Client-side Proof-of-Work difficulty bits (anti-spam)                | `14`                                          |
+| `CORS_ORIGIN`                  | Allowed CORS origins for API requests                                | `http://localhost:3000`                       |
 
 ### 3. Start Database Service
 

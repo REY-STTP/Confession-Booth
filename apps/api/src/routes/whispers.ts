@@ -8,10 +8,12 @@ import { canonicalHash, displayName, newDisplaySeed, newPublicId } from '../cont
 // P1 #11: whisper schema dari SSOT shared.
 import { whisperSchema } from '@booth/shared';
 import { checkContent, WHISPER_MAX } from '../validate.js';
+import { scoreAbuse } from '../abuse.js';
 import { withIdempotency } from '../idempotency.js';
 import {
   rowsOf,
   rateLimitOr429,
+  rateLimitReadOr429,
   requireAuth,
   encodeCursor,
   decodeCursor,
@@ -25,6 +27,7 @@ const whisperBody = whisperSchema;
 export const whisperRoutes: FastifyPluginAsync = async (app) => {
   // --- Whispers (T1-013 & T3-001 Confession Chains) ---
   app.get('/api/confessions/:publicId/whispers', async (req, reply) => {
+    if (!(await rateLimitReadOr429(reply, req))) return;
     const { publicId } = req.params as { publicId: string };
     if (!isPublicIdFormat(publicId, 'c')) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
@@ -120,6 +123,33 @@ export const whisperRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!(await rateLimitOr429(reply, `user:${userId}`, 'whisper'))) return;
 
+    // P2 #18: eskalasi PoW untuk whisper bermasalah (samakan dengan confession).
+    const recentW = rowsOf<{ n: string }>(
+      await db.execute(sql`
+        SELECT count(*) AS n FROM whispers
+        WHERE author_user_id = ${userId}::uuid AND created_at > now() - interval '1 hour'
+      `),
+    );
+    const wVerdict = scoreAbuse({
+      recentCount: Number(recentW[0]?.n ?? 0),
+      isDuplicate: false,
+      openReports: 0,
+    });
+    if (wVerdict.flag) {
+      const { verifyPowSolution, issuePowChallenge } = await import('../pow.js');
+      const sol = req.headers['x-pow-solution'];
+      const powSubject = `user:${userId}`;
+      if (typeof sol !== 'string' || !(await verifyPowSolution(db, sol, powSubject))) {
+        return reply.code(429).send({
+          error: {
+            code: 'POW_REQUIRED',
+            message: 'Solve proof-of-work and retry.',
+            challenge: issuePowChallenge(powSubject),
+          },
+        });
+      }
+    }
+
     let parentWhisperDbId: string | null = null;
     const parentPublicId = parsed.data.parentWhisperId;
     if (parentPublicId) {
@@ -163,22 +193,24 @@ export const whisperRoutes: FastifyPluginAsync = async (app) => {
     const create = async () => {
       const wid = newPublicId('w');
       const seed = newDisplaySeed();
-      const ref = await getStorage().put(contentHash, parsed.data.content);
+      let coId: string | null = null;
       await db.transaction(async (tx) => {
         const co = await tx
           .insert(schema.contentObjects)
-          .values({ contentHash, storageProvider: ref.provider, storageCid: ref.cid })
+          .values({ contentHash, storageProvider: 'db:inline', storageCid: null })
           .onConflictDoNothing({ target: schema.contentObjects.contentHash })
           .returning({ id: schema.contentObjects.id });
-        let coId = co[0]?.id;
+        coId = co[0]?.id ?? null;
         if (!coId) {
           const again = await tx
             .select({ id: schema.contentObjects.id })
             .from(schema.contentObjects)
             .where(eq(schema.contentObjects.contentHash, contentHash))
             .limit(1);
-          coId = again[0].id;
+          coId = again[0]?.id ?? null;
         }
+        // P2 #19: guard eksplisit (bukan crash `again[0].id`).
+        if (!coId) throw new Error('CONTENT_OBJECT_MISSING');
         await tx.insert(schema.whispers).values({
           publicId: wid,
           confessionId: found.id,
@@ -192,6 +224,19 @@ export const whisperRoutes: FastifyPluginAsync = async (app) => {
           badgeType: parsed.data.badgeType ?? null,
         });
       });
+
+      // P2 #19: pin/upload SETELAH commit (lihat confessions.ts).
+      try {
+        const ref = await getStorage().put(contentHash, parsed.data.content);
+        if (coId && (ref.provider !== 'db:inline' || ref.cid)) {
+          await db.execute(sql`
+            UPDATE content_objects SET storage_provider = ${ref.provider}, storage_cid = ${ref.cid}
+            WHERE id = ${coId}::uuid
+          `);
+        }
+      } catch (e) {
+        app.log.error(e, 'storage.put after commit failed');
+      }
 
       await checkAndAwardBadge(db, userId, 'CHAIN_WEAVER');
 

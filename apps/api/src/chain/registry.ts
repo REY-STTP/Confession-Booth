@@ -18,10 +18,15 @@ import { privateKeyToAccount } from 'viem/accounts';
 
 export const REGISTRY_ABI = parseAbi([
   'function publish(bytes32 confessionId, bytes32 contentHash, string contentCID, uint16 version)',
+  'function publishBatch(bytes32[] confessionIds, bytes32[] contentHashes, string[] contentCIDs, uint16 version)',
   'function exists(bytes32 confessionId) view returns (bool)',
   'function owner() view returns (address)',
   'function publishers(address who) view returns (bool)',
   'function setPublisher(address who, bool allowed)',
+  'error NotPublisher(address caller)',
+  'error DuplicateConfession(bytes32 confessionId)',
+  'error InvalidVersion(uint16 version)',
+  'error InvalidCid()',
   'event PublisherUpdated(address indexed publisher, bool allowed)',
   'event ConfessionPublished(bytes32 indexed confessionId, bytes32 indexed contentHash, address indexed publisher, string contentCID, uint64 timestamp, uint16 version)',
 ]);

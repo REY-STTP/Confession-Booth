@@ -1,8 +1,8 @@
 {
-  "address": "0xa8302048773DD213B9D311c2abda199B14339188",
+  "address": "0x015a0018bCefd2604833D9f7B9f5D439aaCaaAB0",
   "network": "sepolia",
   "chainId": 11155111,
   "deployer": "0x1d1aFC2d015963017bED1De13e4ed6c3d3ED1618",
   "publisher": "0x1d1aFC2d015963017bED1De13e4ed6c3d3ED1618",
-  "block": 11726162
+  "block": 11733376
 }

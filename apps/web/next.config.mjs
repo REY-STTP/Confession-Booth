@@ -18,8 +18,9 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
             key: 'Content-Security-Policy',
+            // P2 #17: hardening — tambah object-src/base-uri/frame-ancestors.
             value:
-              `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${apiUrl}`,
+              `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${apiUrl}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`,
           },
         ],
       },

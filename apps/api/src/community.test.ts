@@ -9,6 +9,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { sql } from 'drizzle-orm';
 import { buildApp } from './server.js';
 import { getDb } from './db/client.js';
+import { solvePow } from './pow.js';
 
 const app = await buildApp();
 const db = getDb();
@@ -265,5 +266,47 @@ describe('Fase 3: Community Features (Chains, Badges, Rooms)', () => {
     assert.equal(badgesRes.statusCode, 200);
     const { badges } = badgesRes.json();
     assert.ok(badges.some((b: any) => b.type === 'EMPATHETIC_LISTENER'));
+  });
+
+  it('P2 #18: whisper ke-6 dalam sejam → 429 POW_REQUIRED → solve → 201', async () => {
+    const author = await newUser();
+    const whisperer = await newUser();
+    const cRes = await app.inject({
+      method: 'POST',
+      url: '/api/confessions',
+      remoteAddress: ip(),
+      headers: { authorization: `Bearer ${author.token}` },
+      payload: { category: 'deep', content: `Target whisper pow ${Date.now()}` },
+    });
+    assert.equal(cRes.statusCode, 201);
+    const confessionId = cRes.json().publicId;
+    const post = (content: string, pow?: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/confessions/${confessionId}/whispers`,
+        remoteAddress: ip(),
+        headers: {
+          authorization: `Bearer ${whisperer.token}`,
+          ...(pow ? { 'x-pow-solution': pow } : {}),
+        },
+        payload: { content },
+      });
+    for (let i = 0; i < 5; i++) {
+      const r = await post(`whisper pow ${Date.now()} ${i} ${Math.random().toString(36).slice(2)}`);
+      assert.equal(r.statusCode, 201);
+    }
+    const blocked = await post(
+      `whisper pow blocked ${Date.now()} ${Math.random().toString(36).slice(2)}`,
+    );
+    assert.equal(blocked.statusCode, 429);
+    assert.equal(blocked.json().error.code, 'POW_REQUIRED');
+    const ch = blocked.json().error.challenge as { token: string; difficulty: number };
+    const nonceN = solvePow(ch.token.split('.')[0], ch.difficulty);
+    assert.ok(nonceN !== null);
+    const retry = await post(
+      `whisper pow lolos ${Date.now()} ${Math.random().toString(36).slice(2)}`,
+      `${ch.token}:${nonceN}`,
+    );
+    assert.equal(retry.statusCode, 201);
   });
 });

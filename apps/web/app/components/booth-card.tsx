@@ -152,9 +152,13 @@ export function BoothCard({ item }: { item: FeedItem }) {
           {/* Reactions */}
           <div className="flex flex-wrap items-center gap-1.5" aria-label="Reactions">
             {Object.entries(item.reactions).map(([k, v]) => (
+              // P2 #17: preview reaksi bukan tab-stop (navigasi keyboard lewat konten);
+              // tombol reaksi nyata ada di halaman detail.
               <Link
                 key={k}
                 href={`/confessions/${item.publicId}`}
+                tabIndex={-1}
+                aria-hidden="true"
                 aria-label={`${v} reactions ${k}`}
                 className="group inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground hover:border-border transition-all duration-150"
               >
@@ -234,8 +238,9 @@ export function Empty({
 }
 
 export function SkeletonList({ count = 3 }: { count?: number }) {
+  // P2 #17: skeleton dekoratif murni — aria-hidden saja (label+hidden bersamaan membingungkan SR).
   return (
-    <div className="grid gap-4" aria-hidden="true" aria-label="Loading confessions">
+    <div className="grid gap-4" aria-hidden="true">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}

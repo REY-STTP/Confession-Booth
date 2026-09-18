@@ -247,7 +247,7 @@ export function HeaderNav() {
                     <span>Settings</span>
                   </Link>
                   <a
-                    href="https://sepolia.etherscan.io/address/0xa8302048773DD213B9D311c2abda199B14339188"
+                    href="https://sepolia.etherscan.io/address/0x015a0018bCefd2604833D9f7B9f5D439aaCaaAB0"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 p-2 rounded-lg hover:bg-secondary/60 hover:text-foreground transition-colors"

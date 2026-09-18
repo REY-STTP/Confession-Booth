@@ -20,7 +20,12 @@ import { zkRoutes } from './routes/zk.js';
 export { encodeCursor, decodeCursor, escapeLike } from './routes/common.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const bodyLimit = Number(process.env.BODY_LIMIT ?? 102_400);
+  // P2 #15: clamp agar BODY_LIMIT 0/NaN tak jadi DoS (default 100 KiB).
+  const rawBodyLimit = Number(process.env.BODY_LIMIT ?? 102_400);
+  const bodyLimit =
+    Number.isSafeInteger(rawBodyLimit) && rawBodyLimit > 0
+      ? Math.min(rawBodyLimit, 10_485_760)
+      : 102_400;
   const app = Fastify({
     logger: true,
     bodyLimit,
@@ -30,12 +35,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // T1-024: error JSON konsisten, tanpa stack/HTML leak.
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err, req, reply) => {
     const status =
       typeof (err as { statusCode?: unknown }).statusCode === 'number'
         ? (err as { statusCode: number }).statusCode
         : 500;
-    if (status >= 500) app.log.error(err);
+    if (status >= 500) app.log.error({ err, requestId: (req as { id?: string }).id });
     const msg = err instanceof Error ? err.message : 'Error';
     reply.code(status >= 400 && status < 600 ? status : 500).send({
       error: {
@@ -60,11 +65,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cookie);
 
   // T1-041: request-id di semua respons; gunakan crypto.randomUUID untuk non-predictable ID.
+  // P2 #15: simpan juga di req.id agar korelasi log ↔ metrics ↔ trace.
   app.addHook('onRequest', async (req, reply) => {
     const requestId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    (req as { id?: string }).id = requestId;
     reply.header('x-request-id', requestId);
   });
 

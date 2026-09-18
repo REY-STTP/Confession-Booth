@@ -198,8 +198,14 @@ export async function getRooms(): Promise<RoomItem[]> {
     const res = await fetch(`${API}/api/rooms`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`rooms failed: ${res.status}`);
     const body = await res.json();
+    lastFeedError = null;
     return body.rooms ?? [];
-  } catch {
+  } catch (e) {
+    // P2 #17: tandai offline seperti feed agar halaman rooms bisa banner jujur.
+    lastFeedError = {
+      message: e instanceof Error ? e.message : 'network error',
+      offline: true,
+    };
     return [
       {
         slug: 'campus-life',

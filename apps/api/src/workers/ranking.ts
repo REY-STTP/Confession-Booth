@@ -70,8 +70,11 @@ export async function rankingTick(db = getDb(), batch = 500): Promise<RankingRep
         WHERE target_type = 'CONFESSION' AND status IN ('OPEN', 'REVIEWING')
         GROUP BY 1
       ) rep ON rep.target_id = c.id
+      LEFT JOIN feed_scores fs ON fs.confession_id = c.id AND fs.score_type = 'trending'
       WHERE c.status = 'VISIBLE'
-      ORDER BY c.created_at DESC
+      -- P2 #14: rotasi cakupan — yang belum pernah dinilai didahulukan agar
+      -- konten lama di luar 500 terbaru tetap ter-re-score bergiliran.
+      ORDER BY CASE WHEN fs.calculated_at IS NULL THEN 0 ELSE 1 END, c.created_at DESC
       LIMIT ${batch}
     `),
   );

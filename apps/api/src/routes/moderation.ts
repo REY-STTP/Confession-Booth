@@ -10,6 +10,7 @@ import { snippet } from '../content.js';
 import { AuthError } from '../auth.js';
 import { isReason } from '../validate.js';
 import { rowsOf, rateLimitOr429, requireRole, CRITICAL_REASONS } from './common.js';
+import { withIdempotency } from '../idempotency.js';
 
 const reportBody = z.object({
   targetType: z.enum(['CONFESSION', 'WHISPER']),
@@ -112,30 +113,48 @@ export const moderationRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: { code: 'RATE_LIMITED', message: 'Already reported recently.' } });
     }
 
-    const ins = rowsOf<{ id: string }>(
-      await db.execute(sql`
+    const submit = async (): Promise<{ statusCode: number; body: unknown }> => {
+      const ins = rowsOf<{ id: string }>(
+        await db.execute(sql`
         INSERT INTO reports (reporter_user_id, reporter_ip_hash, target_type, target_id, reason_code, details, status)
         VALUES (${reporterId}::uuid, ${reporterIpHash}, ${targetType}::report_target, ${target.id}::uuid, ${reason}, ${details ?? null}, 'OPEN')
         RETURNING id
       `),
-    );
+      );
 
-    // Triage otomatis: konten kritis → QUARANTINED sementara + skor naik (MODERATION §4).
-    if (CRITICAL_REASONS.has(reason)) {
-      if (targetType === 'CONFESSION') {
-        await db.execute(sql`
+      // Triage otomatis: konten kritis → QUARANTINED sementara + skor naik (MODERATION §4).
+      if (CRITICAL_REASONS.has(reason)) {
+        if (targetType === 'CONFESSION') {
+          await db.execute(sql`
           UPDATE confessions SET status = 'QUARANTINED', moderation_score = LEAST(100, moderation_score + 25)
           WHERE id = ${target.id}::uuid AND status = 'VISIBLE'
         `);
-      } else {
-        await db.execute(
-          sql`UPDATE whispers SET status = 'QUARANTINED' WHERE id = ${target.id}::uuid AND status = 'VISIBLE'`,
+        } else {
+          await db.execute(
+            sql`UPDATE whispers SET status = 'QUARANTINED' WHERE id = ${target.id}::uuid AND status = 'VISIBLE'`,
+          );
+        }
+        await feedCacheInvalidate().catch((err) =>
+          app.log.error(err, 'feedCacheInvalidate failed'),
         );
       }
-      await feedCacheInvalidate().catch((err) => app.log.error(err, 'feedCacheInvalidate failed'));
-    }
 
-    return reply.code(201).send({ id: ins[0].id, status: 'OPEN' });
+      return { statusCode: 201, body: { id: ins[0].id, status: 'OPEN' } };
+    };
+
+    // P2 #17: dedup retry untuk pelapor terautentikasi (anon: throttle per-IP di atas).
+    const idemKey = req.headers['idempotency-key'];
+    if (reporterId && typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128) {
+      const r = await withIdempotency(
+        db,
+        reporterId,
+        `report:${target.id}:${reason}:${idemKey}`,
+        submit,
+      );
+      return reply.code(r.statusCode).send(r.body);
+    }
+    const r = await submit();
+    return reply.code(r.statusCode).send(r.body);
   });
 
   // --- Moderasi (T1-015) ---

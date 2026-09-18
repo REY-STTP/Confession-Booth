@@ -356,6 +356,24 @@ export const indexerState = pgTable('indexer_state', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// P2 #14: tabel audit mismatch indexer (migrasi 0005) — sebelumnya ditulis
+// via SQL mentah + error ditelan; kini via drizzle tanpa swallow.
+export const indexerMismatches = pgTable(
+  'indexer_mismatches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    confessionId: varchar('confession_id', { length: 66 }).notNull(),
+    onchainHash: varchar('onchain_hash', { length: 128 }).notNull(),
+    dbHash: varchar('db_hash', { length: 128 }).notNull(),
+    blockNumber: bigint('block_number', { mode: 'number' }).notNull(),
+    txHash: varchar('tx_hash', { length: 66 }).notNull(),
+    detectedAt: ts('detected_at').notNull().defaultNow(),
+    resolved: boolean('resolved').notNull().default(false),
+    resolutionNotes: text('resolution_notes'),
+  },
+  (t) => [index('idx_indexer_mismatches_confession').on(t.confessionId)],
+);
+
 // Fase 2: Anonymous Credentials & Nullifiers
 export const identityCommitments = pgTable(
   'identity_commitments',

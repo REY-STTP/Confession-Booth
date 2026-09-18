@@ -1,6 +1,7 @@
 // Unit tests Fase 0/T1: validasi, anon-ID, ranking, privacy projection, XSS fuzz.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   validateConfession,
   validateWhisper,
@@ -68,6 +69,29 @@ describe('validateConfession', () => {
   });
   it('terima newline dan tab', () => {
     assert.equal(validateConfession('baris1\nbaris2\ttab').ok, true);
+  });
+  it('P2 #16: tolak URL IP/localhost/intranet (bypass URL_RE lama)', () => {
+    const bad = [
+      'lihat http://192.168.1.1/rahasia',
+      'buka http://10.0.0.5:3000/x',
+      'buka http://localhost:3000/cek',
+      'klik www.server.local/data',
+      'coba http://[::1]/x',
+    ];
+    for (const u of bad) {
+      assert.ok(validateConfession(u).errors.includes('LINKS_NOT_ALLOWED_MVP'), u);
+    }
+    assert.ok(
+      validateWhisper('hubungi http://127.0.0.1/abc').errors.includes('LINKS_NOT_ALLOWED_MVP'),
+    );
+  });
+  it('P2 #16: tolak bidi override, terima ZWJ emoji + RTL polos', () => {
+    const RLO = String.fromCharCode(0x202e);
+
+    assert.ok(validateConfession(`a${RLO}b`).errors.includes('CONTROL_CHARACTERS'));
+    assert.ok(validateConfession(`x${RLO}y`).errors.includes('CONTROL_CHARACTERS'));
+    assert.equal(validateConfession('👨‍👩‍👧 quality time').ok, true);
+    assert.equal(validateConfession('مرحبا بالجميع').ok, true);
   });
   it('normalisasi NFC konsisten untuk hash', () => {
     const a = 'é'; // U+00E9
@@ -249,5 +273,67 @@ describe('Fase 2: Anonymous Credentials & Nullifiers (T2-001, T2-003)', () => {
     });
     assert.equal(vUnknownRoot.ok, false);
     assert.equal(vUnknownRoot.reason, 'UNKNOWN_MERKLE_ROOT');
+  });
+
+  it('P2 #21: daun ganjil/kosong/tunggal konsisten + domain separation node', () => {
+    // Kosong: root = konstanta empty yang terdokumentasi.
+    const empty = buildMerkleTree([]);
+    assert.equal(empty.root, createHash('sha256').update('booth:merkle:empty').digest('hex'));
+    // Tunggal: root == leaf.
+    const one = buildMerkleTree(['solo']);
+    assert.equal(one.root, 'solo');
+    // Ganjil (3, 5): semua proof valid, tamper gagal.
+    for (const n of [3, 5]) {
+      const leaves = Array.from({ length: n }, (_, i) => `leaf-${i}`);
+      const { root } = buildMerkleTree(leaves);
+      for (let i = 0; i < n; i++) {
+        const pf = getMerkleProof(leaves, i);
+        assert.equal(pf.root, root);
+        assert.equal(verifyMerkleProof(leaves[i], pf.path, pf.indices, root), true);
+        assert.equal(verifyMerkleProof('jahat', pf.path, pf.indices, root), false);
+      }
+    }
+    // Domain separation aktif: root != hash format lama tanpa prefix.
+    const prefixed = buildMerkleTree(['a', 'b']).root;
+    const legacy = createHash('sha256').update('a:b').digest('hex');
+    assert.notEqual(prefixed, legacy);
+  });
+  it('P2 #21: ranking guard — negatif/NaN/Infinity tak merambat', () => {
+    assert.ok(
+      Number.isFinite(
+        trendingScore({ reactions: -5, whispers: NaN, uniqueEngagement: 3, ageHours: -2 }),
+      ),
+    );
+    assert.equal(relatableScore({ understand: NaN, total: NaN, ageHours: Infinity }), 0);
+    assert.equal(relatableScore({ understand: 5, total: -1, ageHours: 2 }), 0);
+  });
+  it('P2 #16: stub menolak epoch basi + payload pendek (bukan kripto penuh)', () => {
+    const id = deriveAnonymousIdentity('0xnegatifEpoch');
+    const leaves = [id.commitment];
+    const merkleProof = getMerkleProof(leaves, 0);
+    const epoch = getCurrentEpoch();
+    const proof = createAnonymousSignalProof({
+      identity: id,
+      merkleProof,
+      signal: 'sig',
+      epoch,
+      scope: 'confess',
+    });
+    const expired = verifyAnonymousSignalProof({
+      proof: { ...proof, epoch: epoch - 5 },
+      knownRoots: [merkleProof.root],
+      expectedSignal: 'sig',
+      currentEpoch: epoch,
+    });
+    assert.equal(expired.ok, false);
+    assert.equal(expired.reason, 'EXPIRED_EPOCH');
+    const short = verifyAnonymousSignalProof({
+      proof: { ...proof, proof: 'pendek' },
+      knownRoots: [merkleProof.root],
+      expectedSignal: 'sig',
+      currentEpoch: epoch,
+    });
+    assert.equal(short.ok, false);
+    assert.equal(short.reason, 'INVALID_PROOF_PAYLOAD');
   });
 });

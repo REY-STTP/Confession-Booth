@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/client.js';
-import { metricsSnapshot, sloSnapshot } from '../metrics.js';
+import { metricsSnapshot, metricsPrometheus, sloSnapshot } from '../metrics.js';
 import { rowsOf } from './common.js';
 
 export const systemRoutes: FastifyPluginAsync = async (app) => {
@@ -42,7 +42,13 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
     } catch {
       queueDepth = -1;
     }
-    return { ...(metricsSnapshot() as object), queue: { openReports: queueDepth } };
+    const snap = { ...(metricsSnapshot() as object), queue: { openReports: queueDepth } };
+    // P2 #15: ?format=prom untuk scrape Prometheus (header secret tetap wajib).
+    const { format } = req.query as { format?: string };
+    if (format === 'prom') {
+      return reply.type('text/plain; version=0.0.4').send(metricsPrometheus(snap));
+    }
+    return snap;
   });
 
   // T1H-006: SLO read 99.5% + p95<500ms (window lifetime proses; Prometheus di prod).

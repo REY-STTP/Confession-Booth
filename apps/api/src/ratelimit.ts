@@ -18,6 +18,8 @@ export const LIMITS = {
   report: { limit: 10, windowMs: 3600_000 },
   admin: { limit: 10, windowMs: 10 * 60_000 },
   zkRegister: { limit: 10, windowMs: 3600_000 },
+  // P2 #15: baca publik anti-scraping (loopback dikecualikan di common).
+  read: { limit: 300, windowMs: 60_000 },
 } as const;
 
 export type RateAction = keyof typeof LIMITS;

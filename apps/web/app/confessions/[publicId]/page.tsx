@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   API_URL,
+  countChars,
   type FeedItem,
   type WhisperItem,
   type UserBadgeItem,
@@ -216,7 +217,8 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
   async function sendWhisper(e: React.FormEvent) {
     e.preventDefault();
     if (!whisper.trim()) return;
-    if (whisper.length > 300) {
+    // P2 #17: hitung code-point seperti server (emoji/ZWJ ≠ UTF-16 units).
+    if (countChars(whisper) > 300) {
       toast.error('Whispers must be at most 300 characters');
       return;
     }
@@ -234,26 +236,44 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
     setIsSubmitting(true);
     const content = whisper;
     const parentId = replyTo?.id;
+    // P2 #18: idempotency per submit (retry aman).
+    const idemKey =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     try {
-      const res = await apiFetch(
-        `/api/confessions/${encodeURIComponent(publicId)}/whispers`,
-        accessToken,
-        {
+      const send = (pow?: string) =>
+        apiFetch(`/api/confessions/${encodeURIComponent(publicId)}/whispers`, accessToken, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idemKey,
+            ...(pow ? { 'x-pow-solution': pow } : {}),
+          },
           body: JSON.stringify({
             content,
             parentWhisperId: parentId || undefined,
             badgeType: selectedBadge || undefined,
           }),
-        },
-      );
+        });
+      let res = await send();
+      // P2 #18: jawab tantangan PoW sekali lalu retry (seperti composer).
+      if (res.status === 429) {
+        const { extractPowChallenge, solvePowBrowser } = await import('@/lib/pow');
+        const ch = extractPowChallenge(await res.json().catch(() => ({})));
+        if (ch?.token && typeof ch.difficulty === 'number') {
+          const nonceN = await solvePowBrowser(ch.token.split('.')[0], ch.difficulty);
+          if (nonceN === null) throw new Error('POW_FAILED — device computation timed out.');
+          res = await send(`${ch.token}:${nonceN}`);
+        }
+      }
       if (!res.ok) throw new Error(`whisper failed: ${res.status}`);
       const created = await res.json().catch(() => null);
       const newWhisper: WhisperItem = {
         id: created?.id ?? `local-${Date.now()}`,
         parentWhisperId: parentId ?? null,
-        author: { displayName: 'Anonymous #0000' },
+        // P2 #22: placeholder pending (bukan #0000 yang menyerupai nomor asli).
+        author: { displayName: 'Anonymous #…' },
         content,
         createdAt: new Date().toISOString(),
         isOp: false,
@@ -499,10 +519,10 @@ export default function DetailPage({ params }: { params: Promise<{ publicId: str
 
               <span
                 className={`font-mono text-[11px] ml-auto ${
-                  whisper.length > 270 ? 'text-amber-400' : 'text-muted-foreground'
+                  countChars(whisper) > 270 ? 'text-amber-400' : 'text-muted-foreground'
                 }`}
               >
-                {whisper.length}/300
+                {countChars(whisper)}/300
               </span>
             </div>
           </form>

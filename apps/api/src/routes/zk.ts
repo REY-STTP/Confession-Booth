@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import * as schema from '../db/schema.js';
 import { buildMerkleTree, commitmentSchema } from '@booth/shared';
-import { rowsOf, rateLimitOr429, requireAuth } from './common.js';
+import { rowsOf, rateLimitOr429, rateLimitReadOr429, requireAuth } from './common.js';
 
 // P1 #7: batas komitmen per user (anti-bloat Merkle) + cache root 60 detik.
 const ZK_REGISTER_CAP = 5;
@@ -82,6 +82,8 @@ export const zkRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/api/zk/merkle-root', async (req, reply) => {
+    // P2 #15: throttle baca.
+    if (!(await rateLimitReadOr429(reply, req))) return;
     // P1 #7: paginasi agar anonymity set tak ter-enumerasi sekaligus + hemat respons.
     const parsed = z
       .object({

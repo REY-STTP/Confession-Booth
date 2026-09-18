@@ -16,14 +16,31 @@ const verifyBody = z.object({
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   // --- Auth nyata T1-002 (SIWE-style challenge + sesi). T1-023: address wajib, chainId allowlist. ---
+  // P2 #22: sediakan POST JSON selain GET query (address di URL masuk history/log/proxy).
+  const nonceQuery = z.object({
+    address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    chainId: z.coerce.number().int().positive().safe().optional(),
+  });
   app.get('/api/auth/nonce', async (req, reply) => {
     if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'nonce'))) return;
-    const parsed = z
-      .object({
-        address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-        chainId: z.coerce.number().int().positive().safe().optional(),
-      })
-      .safeParse(req.query);
+    const parsed = nonceQuery.safeParse(req.query);
+    if (!parsed.success) {
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_ADDRESS', message: 'Valid wallet address required.' } });
+    }
+    const { address, chainId } = parsed.data;
+    try {
+      return await issueNonce(getDb(), { address, chainId });
+    } catch (e) {
+      if (e instanceof AuthError)
+        return reply.code(e.status).send({ error: { code: e.code, message: e.message } });
+      throw e;
+    }
+  });
+  app.post('/api/auth/nonce', async (req, reply) => {
+    if (!(await rateLimitOr429(reply, `ip:${req.ip}`, 'nonce'))) return;
+    const parsed = nonceQuery.safeParse(req.body ?? {});
     if (!parsed.success) {
       return reply
         .code(400)

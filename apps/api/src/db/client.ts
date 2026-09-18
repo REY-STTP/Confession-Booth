@@ -10,7 +10,10 @@ export function getPool(): pg.Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) throw new Error('DATABASE_URL belum di-set (lihat .env.example)');
-    pool = new pg.Pool({ connectionString, max: Number(process.env.DB_POOL_MAX ?? 10) });
+    // P2 #15: clamp agar NaN/0/negatif tak meledakkan pg.Pool atau mengunci DB.
+    const rawMax = Number(process.env.DB_POOL_MAX ?? 10);
+    const max = Number.isSafeInteger(rawMax) && rawMax > 0 ? Math.min(rawMax, 50) : 10;
+    pool = new pg.Pool({ connectionString, max });
   }
   return pool;
 }

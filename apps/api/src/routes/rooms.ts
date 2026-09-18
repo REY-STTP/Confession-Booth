@@ -2,12 +2,14 @@ import type { FastifyPluginAsync } from 'fastify';
 import { sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { feedCacheGet, feedCacheSet } from '../cache.js';
-import { rowsOf } from './common.js';
+import { rowsOf, rateLimitReadOr429 } from './common.js';
 
 export const roomRoutes: FastifyPluginAsync = async (app) => {
   // --- T3-003: Community Rooms API ---
   // AUDIT PERF-004: Cache rooms listing (invalidated on confession changes/moderation)
-  app.get('/api/rooms', async (_req, _reply) => {
+  app.get('/api/rooms', async (req, reply) => {
+    // P2 #15: throttle baca.
+    if (!(await rateLimitReadOr429(reply, req))) return;
     const cached = await feedCacheGet('rooms:all');
     if (cached) return cached;
 
@@ -46,6 +48,7 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/api/rooms/:slug', async (req, reply) => {
+    if (!(await rateLimitReadOr429(reply, req))) return;
     const { slug } = req.params as { slug: string };
     const db = getDb();
     const rows = rowsOf<{

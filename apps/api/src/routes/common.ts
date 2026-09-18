@@ -207,9 +207,23 @@ export const feedQuery = feedQuerySchema;
 
 export const CRITICAL_REASONS = new Set(['THREAT', 'DOXXING', 'SEXUAL_EXPLOITATION']);
 
+// P2 #15: throttle baca anti-scraping/enumerasi. Loopback dikecualikan
+// (tooling lokal/healthcheck tepercaya) — selain itu semua IP dihitung.
+const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+export async function rateLimitReadOr429(
+  reply: FastifyReply,
+  req: FastifyRequest,
+): Promise<boolean> {
+  if (LOOPBACK_IPS.has(req.ip)) return true;
+  return rateLimitOr429(reply, `ip:${req.ip}`, 'read');
+}
+
 export const refreshCookieOpts = {
   path: '/api/auth',
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  // P2 #15: Strict (refresh hanya dipakai fetch same-origin).
+  // __Host- disengaja TIDAK dipakai: mensyaratkan Path=/ + Secure selalu,
+  // yang mem widen scope cookie dan merusak dev http lokal.
+  sameSite: 'strict' as const,
 };

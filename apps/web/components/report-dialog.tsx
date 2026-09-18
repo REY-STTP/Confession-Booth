@@ -4,6 +4,7 @@ import * as React from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { API_URL } from '@/lib/booth';
+import { extractPowChallenge, solvePowBrowser } from '@/lib/pow';
 import {
   Dialog,
   DialogContent,
@@ -20,12 +21,14 @@ interface ReportDialogProps {
   targetType?: 'CONFESSION' | 'WHISPER';
 }
 
+// P2 #17: kode HARUS sama dengan enum API (dulu lowercase → selalu 400 INVALID_REPORT).
 const REPORT_REASONS = [
-  { value: 'harassment', label: 'Harassment / Bullying' },
-  { value: 'hate_speech', label: 'Hate Speech' },
-  { value: 'doxxing', label: 'Personal Information Exposure (Doxxing)' },
-  { value: 'spam', label: 'Spam / Unauthorized Advertising' },
-  { value: 'other', label: 'Other Community Guidelines Violation' },
+  { value: 'HARASSMENT', label: 'Harassment / Bullying' },
+  { value: 'HATE', label: 'Hate Speech' },
+  { value: 'DOXXING', label: 'Personal Information Exposure (Doxxing)' },
+  { value: 'SPAM', label: 'Spam / Unauthorized Advertising' },
+  { value: 'THREAT', label: 'Threats / Self-harm' },
+  { value: 'OTHER', label: 'Other Community Guidelines Violation' },
 ];
 
 export function ReportDialog({
@@ -44,12 +47,32 @@ export function ReportDialog({
     setIsSubmitting(true);
     setError('');
 
-    try {
-      const res = await fetch(`${API_URL}/api/reports`, {
+    // P2 #17: Idempotency-Key per submit (dedup retry) + jawab PoW bila server meminta.
+    const idemKey =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const send = (pow?: string) =>
+      fetch(`${API_URL}/api/reports`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idemKey,
+          ...(pow ? { 'x-pow-solution': pow } : {}),
+        },
         body: JSON.stringify({ targetType, targetId, reason }),
       });
+
+    try {
+      let res = await send();
+      if (res.status === 429) {
+        const ch = extractPowChallenge(await res.json().catch(() => ({})));
+        if (ch?.token && typeof ch.difficulty === 'number') {
+          const nonceN = await solvePowBrowser(ch.token.split('.')[0], ch.difficulty);
+          if (nonceN === null) throw new Error('POW_FAILED — device computation timed out.');
+          res = await send(`${ch.token}:${nonceN}`);
+        }
+      }
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

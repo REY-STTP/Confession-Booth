@@ -69,7 +69,7 @@ export const config = {
   // Satu sumber kanonis: NEXT_PUBLIC_CONTRACT_ADDRESS (CONTRACT_ADDRESS lama dihapus).
   contractAddress: (() => {
     const raw = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
-    return raw && !raw.startsWith('0x0000') ? raw : '0xa8302048773DD213B9D311c2abda199B14339188';
+    return raw && !raw.startsWith('0x0000') ? raw : '0x015a0018bCefd2604833D9f7B9f5D439aaCaaAB0';
   })(),
   corsOrigin: parseCorsOrigin(),
   trustProxy: parseTrustProxy(),

@@ -68,7 +68,9 @@ export async function buildMerkleTreeBrowser(leaves: string[]): Promise<{
     for (let i = 0; i < current.length; i += 2) {
       const left = current[i];
       const right = i + 1 < current.length ? current[i + 1] : left;
-      const combined = await sha256Browser(`${left}:${right}`);
+      // P2 #21: HARUS identik dengan @booth/shared buildMerkleTree
+      // (domain separation node) — root client ≡ server.
+      const combined = await sha256Browser(`booth:merkle:node:${left}:${right}`);
       next.push(combined);
     }
     levels.push(next);

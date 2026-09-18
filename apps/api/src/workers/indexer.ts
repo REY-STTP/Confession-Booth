@@ -4,9 +4,10 @@
 // - Mismatch hash hanya dicatat (mismatched), TIDAK menimpa data DB.
 // - Bisa loop (`npm run worker:indexer`) atau tick sekali (test).
 
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { getDb } from '../db/client.js';
 import { config } from '../config.js';
+import * as schema from '../db/schema.js';
 import { PUBLISHED_EVENT, eqBytes32, publicClient, type ChainEnv } from '../chain/registry.js';
 
 export interface IndexerReport {
@@ -26,6 +27,8 @@ const LOOKBACK = 2000n;
 const MAX_LOOKBACK_LIMIT = 50000n; // limit RPC block range
 const MAX_BLOCK_CHUNK = 2000n; // batas maksimum blok yang ditanyakan per call RPC agar aman di semua provider
 const MISMATCH_ALERT_THRESHOLD = 5; // alert jika mismatch > 5 per tick
+// P2 #14: jeda finality — cursor tak maju melewati blok yang belum final (anti reorg).
+const FINALITY_LAG = 2n;
 
 export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<IndexerReport> {
   const E: ChainEnv = env ?? {
@@ -57,8 +60,14 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
 
   if (from > latest) from = latest + 1n; // belum ada blok baru
 
+  // P2 #14: jangan kejar ujung rantai — sisakan lag finality.
+  // Chain lokal (31337, automine, tanpa reorg) dikecualikan agar tick test
+  // yang baru publish langsung terlihat.
+  const finalityLag = E.chainId === 31337 ? 0n : FINALITY_LAG;
+  const safeLatest = latest > finalityLag ? latest - finalityLag : 0n;
+
   // Batasi blok per-tick dengan MAX_BLOCK_CHUNK
-  const targetTo = from + MAX_BLOCK_CHUNK < latest ? from + MAX_BLOCK_CHUNK : latest;
+  const targetTo = from + MAX_BLOCK_CHUNK < safeLatest ? from + MAX_BLOCK_CHUNK : safeLatest;
 
   const report: IndexerReport = {
     fromBlock: Number(from),
@@ -98,16 +107,28 @@ export async function indexerTick(db = getDb(), env?: ChainEnv): Promise<Indexer
         report.mismatched += 1;
         mismatchCount++;
         console.warn(`[indexer] hash mismatch ${a.confessionId}`);
-        // Persist mismatch untuk investigasi
-        await db
-          .execute(
-            sql`
-          INSERT INTO indexer_mismatches (confession_id, onchain_hash, db_hash, block_number, tx_hash, detected_at)
-          VALUES (${a.confessionId}, ${a.contentHash}, ${found.content_hash}, ${Number(log.blockNumber)}, ${log.transactionHash}, now())
-          ON CONFLICT DO NOTHING
-        `,
+        // P2 #14: persist mismatch via drizzle (gagal persist = error terlihat,
+        // bukan ditelan). Dedup: satu baris unresolved per (confession, block).
+        const dup = await db
+          .select({ id: schema.indexerMismatches.id })
+          .from(schema.indexerMismatches)
+          .where(
+            and(
+              eq(schema.indexerMismatches.confessionId, a.confessionId),
+              eq(schema.indexerMismatches.blockNumber, Number(log.blockNumber)),
+              eq(schema.indexerMismatches.resolved, false),
+            ),
           )
-          .catch(() => {}); // ignore if table doesn't exist
+          .limit(1);
+        if (dup.length === 0) {
+          await db.insert(schema.indexerMismatches).values({
+            confessionId: a.confessionId,
+            onchainHash: a.contentHash,
+            dbHash: found.content_hash,
+            blockNumber: Number(log.blockNumber),
+            txHash: log.transactionHash ?? '',
+          });
+        }
         continue;
       }
       if (found.status !== 'CONFIRMED') {

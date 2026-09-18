@@ -115,6 +115,107 @@ describe('ConfessionRegistry (T1-020)', () => {
     );
   });
 
+  it('P2 #16: version selain PROTOCOL_VERSION revert InvalidVersion', async () => {
+    const registry = await deploy();
+    await expect(registry.publish(ID, HASH, '', 0))
+      .to.be.revertedWithCustomError(registry, 'InvalidVersion')
+      .withArgs(0);
+    await expect(registry.publish(ID, HASH, '', 65535))
+      .to.be.revertedWithCustomError(registry, 'InvalidVersion')
+      .withArgs(65535);
+  });
+
+  it('P2 #16: CID charset — spasi/markup ditolak, CID valid diterima', async () => {
+    const registry = await deploy();
+    await expect(registry.publish(ID, HASH, 'cid with space', 1)).to.be.revertedWithCustomError(
+      registry,
+      'InvalidCid',
+    );
+    await expect(registry.publish(ID, HASH, 'cid<script>', 1)).to.be.revertedWithCustomError(
+      registry,
+      'InvalidCid',
+    );
+    const id2 = ethers.keccak256(ethers.toUtf8Bytes('c_cid_ok'));
+    await expect(
+      registry.publish(id2, HASH, 'bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku', 1),
+    ).to.emit(registry, 'ConfessionPublished');
+  });
+
+  it('P2 #16: publishBatch — 2 item + event, mismatch revert, duplikat revert', async () => {
+    const registry = await deploy();
+    const idA = ethers.keccak256(ethers.toUtf8Bytes('c_batch_a'));
+    const idB = ethers.keccak256(ethers.toUtf8Bytes('c_batch_b'));
+    await expect(registry.publishBatch([idA, idB], [HASH, HASH], ['', 'bafkcid'], 1)).to.emit(
+      registry,
+      'ConfessionPublished',
+    );
+    expect(await registry.exists(idA)).to.equal(true);
+    expect(await registry.exists(idB)).to.equal(true);
+    await expect(registry.publishBatch([idA], [HASH, HASH], ['', ''], 1))
+      .to.be.revertedWithCustomError(registry, 'LengthMismatch')
+      .withArgs();
+    const idC = ethers.keccak256(ethers.toUtf8Bytes('c_batch_c'));
+    await expect(registry.publishBatch([idC, idC], [HASH, HASH], ['', ''], 1))
+      .to.be.revertedWithCustomError(registry, 'DuplicateConfession')
+      .withArgs(idC);
+    const [, alice] = await ethers.getSigners();
+    const asAlice = registry.connect(alice) as unknown as typeof registry;
+    await expect(asAlice.publishBatch([idC], [HASH], [''], 1))
+      .to.be.revertedWithCustomError(registry, 'NotPublisher')
+      .withArgs(alice.address);
+  });
+
+  it('P2 #16: front-run squat — attacker kena NotPublisher sebelum Duplicate', async () => {
+    const registry = await deploy();
+    const [owner, alice] = await ethers.getSigners();
+    const target = ethers.keccak256(ethers.toUtf8Bytes('c_squat_target'));
+    // Attacker duluan dengan ID yang sama → tetap NotPublisher (bukan Duplicate).
+    const asAlice = registry.connect(alice) as unknown as typeof registry;
+    await expect(asAlice.publish(target, HASH, '', 1))
+      .to.be.revertedWithCustomError(registry, 'NotPublisher')
+      .withArgs(alice.address);
+    // Publisher sah tetap bisa publish ID itu.
+    await registry.publish(target, HASH, '', 1);
+    expect(await registry.exists(target)).to.equal(true);
+    expect(owner.address).to.not.equal(alice.address);
+  });
+
+  it('P2 #16: exists(0x0) false + ABI tepat (tanpa fungsi hapus/ubah)', async () => {
+    const registry = await deploy();
+    const zero = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    expect(await registry.exists(zero)).to.equal(false);
+    const fns = new Set(
+      registry.interface.fragments
+        .filter((f) => f.type === 'function')
+        .map((f) => (f as unknown as { name: string }).name),
+    );
+    const expected = [
+      'MAX_CID_LEN',
+      'PROTOCOL_VERSION',
+      'exists',
+      'owner',
+      'publish',
+      'publishBatch',
+      'publishers',
+      'setPublisher',
+    ].sort();
+    expect([...fns].sort()).to.deep.equal(expected);
+  });
+
+  it('P2 #16: filter event by contentHash (indexed kedua)', async () => {
+    const registry = await deploy();
+    const addr = await registry.getAddress();
+    const tx = await registry.publish(ID, HASH, '', 1);
+    const rc = await tx.wait();
+    const logs = await ethers.provider.getLogs({
+      address: addr,
+      topics: [null, null, HASH],
+      fromBlock: rc!.blockNumber,
+      toBlock: rc!.blockNumber,
+    });
+    expect(logs.length).to.equal(1);
+  });
+
   it('tidak ada fungsi hapus/ubah histori', async () => {
     const registry = await deploy();
     for (const fn of ['remove', 'delete', 'update', 'rewrite', 'hide']) {

@@ -3,9 +3,17 @@
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BookOpen, PenLine, Sparkles, TrendingUp, Flame } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  PenLine,
+  Sparkles,
+  TrendingUp,
+  Flame,
+  AlertTriangle,
+} from 'lucide-react';
 import { BoothCard, Empty, SkeletonList } from '@/app/components/booth-card';
-import { getFeed, getRoom, type FeedItem, type RoomItem } from '@/lib/booth';
+import { getFeed, getRoom, getLastFeedError, type FeedItem, type RoomItem } from '@/lib/booth';
 import { RoomIcon } from '@/components/icon-helpers';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +27,8 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
   const [sort, setSort] = useState<'new' | 'trending' | 'relatable'>('new');
   const [loading, setLoading] = useState(true);
   const [roomNotFound, setRoomNotFound] = useState(false);
+  // P2 #17: banner offline jujur seperti feed.
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +52,7 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
       .then((feed) => {
         if (!cancelled) {
           setItems(feed);
+          setOffline(getLastFeedError()?.offline ?? false);
           setLoading(false);
         }
       })
@@ -67,6 +78,17 @@ export default function RoomFeedPage({ params }: { params: Promise<{ slug: strin
           <span>Back to All Rooms</span>
         </Link>
       </div>
+
+      {/* P2 #17: banner offline jujur (fallback mock). */}
+      {offline && !loading ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs sm:text-sm text-amber-200"
+        >
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
+          <p>API unreachable — displaying local fallback cache.</p>
+        </div>
+      ) : null}
 
       {/* Room Hero Header */}
       {room ? (

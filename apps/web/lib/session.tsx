@@ -17,6 +17,7 @@ interface SessionCtx {
   state: SessionState;
   accessToken: string | null;
   signature: string | null;
+  sessionAddress: string | null;
   error: string;
   enter: () => Promise<void>;
   logout: () => Promise<void>;
@@ -28,6 +29,7 @@ const Ctx = createContext<SessionCtx>({
   state: 'visitor',
   accessToken: null,
   signature: null,
+  sessionAddress: null,
   error: '',
   enter: async () => {},
   logout: async () => {},
@@ -46,6 +48,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<SessionState>('visitor');
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
+  // P2 #22: alamat sesi untuk verifikasi akun ZK (cegah identitas silang A/B).
+  const [sessionAddress, setSessionAddress] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -93,9 +97,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         throw new Error(`Incorrect network (${walletChain}). Please switch to chain ${expected}.`);
       }
       setState('signing');
-      const nRes = await fetch(
-        `${API_URL}/api/auth/nonce?address=${address}&chainId=${walletChain}`,
-      );
+      // P2 #22: nonce via POST JSON (address di URL masuk history/log/proxy).
+      const nRes = await fetch(`${API_URL}/api/auth/nonce`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, chainId: walletChain }),
+      });
       if (nRes.status === 429)
         throw new Error('Too many requests. Please wait a moment (rate-limit).');
       if (!nRes.ok) {
@@ -126,6 +133,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const body = await vRes.json();
       setAccessToken(body.accessToken ?? null);
       setSignature(sig);
+      setSessionAddress(address.toLowerCase());
       setState('booth');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Authentication failed.');
@@ -144,6 +152,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
     const address = accounts?.[0];
     if (!address) throw new Error('No wallet address found.');
+    // P2 #22: tolak bila akun wallet ≠ akun sesi (identitas ZK milik A,
+    // registrasi pakai token B = mapping silang).
+    if (sessionAddress && address.toLowerCase() !== sessionAddress.toLowerCase()) {
+      throw new Error('Wallet account changed. Please re-enter the booth with one account.');
+    }
     // P1 #7: pesan ZK diikat ke address + chain + waktu (bukan template statis),
     // agar identitas turunan tidak bisa dipindahkan lintas akun/jaringan.
     const chainHex = (await eth.request({ method: 'eth_chainId' }).catch(() => null)) as
@@ -161,7 +174,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     })) as string;
     setSignature(sig);
     return sig;
-  }, [signature]);
+  }, [signature, sessionAddress]);
 
   // P1 #7: hapus signature dari RAM setelah publish (root identitas sekali pakai).
   const clearSignature = useCallback(() => {
@@ -180,6 +193,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     setAccessToken(null);
     setSignature(null);
+    setSessionAddress(null);
     setState('visitor');
   }, [accessToken]);
 
@@ -188,13 +202,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       state,
       accessToken,
       signature,
+      sessionAddress,
       error,
       enter,
       logout,
       getOrRequestSignature,
       clearSignature,
     }),
-    [state, accessToken, signature, error, enter, logout, getOrRequestSignature, clearSignature],
+    [
+      state,
+      accessToken,
+      signature,
+      sessionAddress,
+      error,
+      enter,
+      logout,
+      getOrRequestSignature,
+      clearSignature,
+    ],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

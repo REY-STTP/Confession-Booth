@@ -2,6 +2,7 @@ import type { HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-ethers';
 import '@nomicfoundation/hardhat-chai-matchers';
 import '@nomicfoundation/hardhat-verify';
+import 'hardhat-gas-reporter';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -42,6 +43,13 @@ const config: HardhatUserConfig = {
     ],
   },
   sourcify: { enabled: false },
+  // P2 #16: snapshot gas hanya bila REPORT_GAS=1 (tak memperlambat test default).
+  gasReporter: {
+    enabled: process.env.REPORT_GAS === '1',
+    currency: 'USD',
+    outputFile: 'gas-report.txt',
+    noColors: true,
+  },
 };
 
 export default config;

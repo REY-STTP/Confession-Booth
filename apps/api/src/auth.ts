@@ -200,6 +200,15 @@ export async function verifyAndLogin(
         })
         .returning();
       u = ins[0];
+      // P2 #15: bootstrap via env tercatat (sama seperti grant manual).
+      if (envRole) {
+        await tx.insert(schema.adminAudit).values({
+          action: 'ENV_ROLE',
+          walletAddress: address,
+          role: envRole,
+          ipHash: null,
+        });
+      }
     } else {
       // P1 #10: AuthError terstruktur (mapping 403 FORBIDDEN di route terjaga,
       // tanpa pesan bahasa-spesifik yang membocorkan fingerprinting).
@@ -207,18 +216,29 @@ export async function verifyAndLogin(
         throw new AuthError('FORBIDDEN', 'Account restricted.', 403);
       }
       // Update lastSeenAt and chainId; only set wallet_first_tx_at if null (first verified login)
-      // JANGAN reset status ke 'ACTIVE' agar status BANNED/RESTRICTED tidak hilang
+      // JANGAN reset status ke 'ACTIVE' agar status BANNED/RESTRICTED tidak hilang.
+      // P2 #15: envRole hanya menimpa bila BERBEDA (demote via DB tak lagi
+      // tertimpa diam-diam tiap login) + tercatat di admin_audit.
+      const roleChanged = envRole && envRole !== u.role ? envRole : null;
       const upd = await tx
         .update(schema.users)
         .set({
           lastSeenAt: new Date(now),
           chainId: row.chainId,
-          ...(envRole ? { role: envRole } : {}),
+          ...(roleChanged ? { role: roleChanged } : {}),
           ...(u.walletFirstTxAt === null ? { walletFirstTxAt: new Date(now) } : {}),
         })
         .where(eq(schema.users.id, u.id))
         .returning();
       u = upd[0];
+      if (roleChanged) {
+        await tx.insert(schema.adminAudit).values({
+          action: 'ENV_ROLE',
+          walletAddress: address,
+          role: roleChanged,
+          ipHash: null,
+        });
+      }
     }
     await tx.insert(schema.sessions).values([
       { userId: u.id, tokenHash: sha256hex(accessToken), expiresAt: accessExpiresAt },

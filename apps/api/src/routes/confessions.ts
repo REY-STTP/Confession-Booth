@@ -29,6 +29,7 @@ import {
   type Db,
   rowsOf,
   rateLimitOr429,
+  rateLimitReadOr429,
   requireAuth,
   encodeCursor,
   decodeCursor,
@@ -99,6 +100,8 @@ const reactBody = reactSchema;
 export const confessionRoutes: FastifyPluginAsync = async (app) => {
   // --- Feed (T1-011): hanya VISIBLE, proyeksi publik SCHEMA §17. ---
   app.get('/api/feed', async (req, reply) => {
+    // P2 #15: throttle baca.
+    if (!(await rateLimitReadOr429(reply, req))) return;
     const parsed = feedQuery.safeParse(req.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: { code: 'INVALID_QUERY', message: 'Invalid query.' } });
@@ -175,6 +178,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/api/confessions/:publicId', async (req, reply) => {
+    if (!(await rateLimitReadOr429(reply, req))) return;
     const { publicId } = req.params as { publicId: string };
     if (!isPublicIdFormat(publicId, 'c')) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Not found.' } });
@@ -227,7 +231,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
         ? row.contract_address
         : config.contractAddress && !config.contractAddress.startsWith('0x0000')
           ? config.contractAddress
-          : '0xa8302048773DD213B9D311c2abda199B14339188';
+          : '0x015a0018bCefd2604833D9f7B9f5D439aaCaaAB0';
     // P0 #5: verifier off-chain assert — klaim CONFIRMED hanya valid bila kontrak
     // dan chainId sesuai konfigurasi yang diharapkan (anti replay lintas-chain/fork).
     const verified =
@@ -427,7 +431,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
       const publicId = newPublicId('c');
       const seed = newDisplaySeed();
       const now = new Date();
-      const ref = await getStorage().put(contentHash, content);
+      let coId: string | null = null;
       try {
         await db.transaction(async (tx) => {
           if (nullifierHash && parsed.data.zkProof) {
@@ -451,20 +455,23 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
             }
           }
 
+          // P2 #19: baris konten dibuat dulu (provider inline), pin/upload
+          // storage BERJALAN SETELAH commit — tx gagal tak meninggalkan pin yatim.
           const co = await tx
             .insert(schema.contentObjects)
-            .values({ contentHash, storageProvider: ref.provider, storageCid: ref.cid })
+            .values({ contentHash, storageProvider: 'db:inline', storageCid: null })
             .onConflictDoNothing({ target: schema.contentObjects.contentHash })
             .returning({ id: schema.contentObjects.id });
-          let coId = co[0]?.id;
+          coId = co[0]?.id ?? null;
           if (!coId) {
             const again = await tx
               .select({ id: schema.contentObjects.id })
               .from(schema.contentObjects)
               .where(eq(schema.contentObjects.contentHash, contentHash))
               .limit(1);
-            coId = again[0].id;
+            coId = again[0]?.id ?? null;
           }
+          if (!coId) throw new Error('CONTENT_OBJECT_MISSING');
           const conf = await tx
             .insert(schema.confessions)
             .values({
@@ -489,7 +496,7 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
             contractAddress:
               config.contractAddress && !config.contractAddress.startsWith('0x0000')
                 ? config.contractAddress
-                : '0xa8302048773DD213B9D311c2abda199B14339188',
+                : '0x015a0018bCefd2604833D9f7B9f5D439aaCaaAB0',
             onchainConfessionId: onchainId(publicId),
             contentHash,
             status: 'PENDING_CHAIN',
@@ -509,6 +516,20 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
           };
         }
         throw e;
+      }
+
+      // P2 #19: pin/upload SETELAH commit — IPFS down tak menggagalkan publish,
+      // dan tak ada pin yatim bila transaksi rollback.
+      try {
+        const ref = await getStorage().put(contentHash, content);
+        if (coId && (ref.provider !== 'db:inline' || ref.cid)) {
+          await db.execute(sql`
+            UPDATE content_objects SET storage_provider = ${ref.provider}, storage_cid = ${ref.cid}
+            WHERE id = ${coId}::uuid
+          `);
+        }
+      } catch (e) {
+        app.log.error(e, 'storage.put after commit failed');
       }
 
       if (userId) {

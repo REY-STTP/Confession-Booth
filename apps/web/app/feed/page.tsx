@@ -110,7 +110,11 @@ function FeedInner({ sort }: { sort: 'new' | 'trending' | 'relatable' }) {
               </span>
             ) : null}
             {q ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-foreground font-mono">
+              // P2 #22: truncate tampilan query panjang + title penuh.
+              <span
+                title={q}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-foreground font-mono max-w-60 truncate"
+              >
                 &ldquo;{q}&rdquo;
               </span>
             ) : null}

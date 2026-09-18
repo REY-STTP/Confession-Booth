@@ -65,7 +65,7 @@ export function CategoryPills({
       {/* "All" pill */}
       <Link
         href={getHref()}
-        aria-current={!activeCategory ? 'true' : undefined}
+        aria-current={!activeCategory ? 'page' : undefined}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring border',
           !activeCategory
@@ -85,7 +85,7 @@ export function CategoryPills({
           <Link
             key={c}
             href={getHref(c)}
-            aria-current={isActive ? 'true' : undefined}
+            aria-current={isActive ? 'page' : undefined}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring border capitalize',
               isActive

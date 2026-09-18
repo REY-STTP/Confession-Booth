@@ -80,7 +80,9 @@ export function escapeHtml(s: string): string {
 }
 
 const MARKUP_RE = /<[a-zA-Z\/!]/; // pola tag HTML kasar: <b, </div, <!doctype
-const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+// P2 #16: + bidi override/isolate (U+202A-202E, U+2066-2069) — vektor spoofing.
+// Disengaja TIDAK memblokir ZWJ/ZWNJ (U+200C-200D, emoji) dan LRM/RLM (U+200E-200F, teks RTL).
+const CONTROL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u202A-\u202E\u2066-\u2069]/;
 
 // URL regex presisi tinggi: match URL dengan protokol wajib atau www. + domain valid
 // - Harus pakai https?:// atau www. (tidak match "file.name" atau "version 2.0")
@@ -92,6 +94,44 @@ const URL_RE =
 
 // Shorthand URL detection untuk platform populer tanpa protokol (block tambahan)
 const SHORTHAND_URL_RE = /(?:^|\s)(?:t\.me|telegram\.me|discord\.gg|discord\.com\/invite)\/\S+/i;
+
+// P2 #16: tangkap host IP/localhost yang lolos URL_RE (TLD-nya bukan huruf,
+// mis. http://192.168.1.1/ atau http://localhost:3000/).
+const LOOSE_HOST_RE = /(?:https?:\/\/|www\.)(\[[^\]\s]+\]|[^/\s:?'"<>\^`#\]]+)/i;
+const BLOCKED_SUFFIX = [
+  '.localhost',
+  '.local',
+  '.internal',
+  '.invalid',
+  '.example',
+  '.test',
+  '.onion',
+];
+
+function hostPart(raw: string): string {
+  // Literal IPv6 berkurung dipotong dulu (split ':' akan menghancurkannya).
+  const bracket = /^\[([^\]]*)\]/.exec(raw);
+  if (bracket) return bracket[1].toLowerCase();
+  return raw
+    .split(/[/:?#]/, 1)[0]
+    .replace(/\.$/, '')
+    .toLowerCase();
+}
+
+function isBlockedHost(host: string): boolean {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return true; // IPv4
+  if (host.includes(':') && /^[0-9a-f:]+$/.test(host)) return true; // IPv6
+  if (host === 'localhost') return true;
+  return BLOCKED_SUFFIX.some((s) => host === s.slice(1) || host.endsWith(s));
+}
+
+/** True bila teks mengandung URL — termasuk bentuk IP/localhost yang lolos URL_RE. */
+export function containsBlockedUrl(text: string): boolean {
+  if (URL_RE.test(text) || SHORTHAND_URL_RE.test(text)) return true;
+  const m = LOOSE_HOST_RE.exec(text);
+  if (!m) return false;
+  return isBlockedHost(hostPart(m[1]));
+}
 
 export interface ContentCheck {
   ok: boolean;
@@ -120,7 +160,7 @@ export function validateConfession(content: unknown): ContentCheck {
   const base = checkBase(content, CONFESSION_MIN, CONFESSION_MAX);
   if (!base.ok) return base;
   const text = content as string;
-  if (URL_RE.test(text) || SHORTHAND_URL_RE.test(text)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
+  if (containsBlockedUrl(text)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
   base.ok = base.errors.length === 0;
   return base;
 }
@@ -130,7 +170,7 @@ export function validateWhisper(content: unknown): ContentCheck {
   const base = checkBase(content, WHISPER_MIN, WHISPER_MAX);
   if (!base.ok) return base;
   const text = content as string;
-  if (URL_RE.test(text) || SHORTHAND_URL_RE.test(text)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
+  if (containsBlockedUrl(text)) base.errors.push('LINKS_NOT_ALLOWED_MVP');
   base.ok = base.errors.length === 0;
   return base;
 }
@@ -195,7 +235,11 @@ export function trendingScore(params: {
   uniqueEngagement: number;
   ageHours: number;
 }): number {
-  const { reactions, whispers, uniqueEngagement, ageHours } = params;
+  // P2 #21: sanitasi input — negatif/NaN/Infinity tak boleh merambat (Infinity/NaN skor).
+  const reactions = nonNeg(params.reactions);
+  const whispers = nonNeg(params.whispers);
+  const uniqueEngagement = nonNeg(params.uniqueEngagement);
+  const ageHours = nonNeg(params.ageHours);
   const engagement = reactions + whispers * 2 + uniqueEngagement * 1.5;
   return engagement / Math.pow(ageHours + 2, 1.5);
 }
@@ -206,9 +250,16 @@ export function relatableScore(params: {
   total: number;
   ageHours: number;
 }): number {
-  const { understand, total, ageHours } = params;
+  const understand = nonNeg(params.understand);
+  const total = nonNeg(params.total);
+  const ageHours = nonNeg(params.ageHours);
   if (total <= 0) return 0;
   return (understand * 2 + total) / Math.pow(ageHours + 2, 1.3);
+}
+
+/** P2 #21: bilangan cacah aman untuk skor (negatif/NaN/Infinity → 0). */
+function nonNeg(n: number): number {
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
 /** T1H-002 ranking v2: anti-Sybil (akun baru didiskon) + penalti report terbuka.
@@ -254,7 +305,7 @@ export const COPY = {
   midnightTitle: 'Midnight Confessions',
   midnightSub: 'Things people only say when nobody is listening.',
   privacyNotice:
-    'Your confession is public. Your profile doesn\u2019t have to be. Confession Booth is designed for anonymous expression, but blockchain and network metadata can still create privacy risks. Don\u2019t include information that could identify you.',
+    'Your confession is public. Your profile doesn\u2019t have to be. Confession Booth is designed for anonymous expression, but blockchain and network metadata can still create privacy risks. Don\u2019t include information that could identify you. Whispers and reactions are sent under your session (pseudonymous, not zero-knowledge) and stay linkable server-side; confession hashes are deterministic, so very short texts could be brute-forced.',
   reportTitle: 'Something wrong?',
   reportSub: 'Report this confession and our moderation team will review it.',
 } as const;
@@ -304,7 +355,11 @@ export interface MerkleProof {
   indices: number[]; // 0 = kiri, 1 = kanan
 }
 
-/** Membangun Merkle Tree sederhana untuk verifikasi keanggotaan kumpulan anonimitas (T2-001). */
+/** Membangun Merkle Tree sederhana untuk verifikasi keanggotaan kumpulan anonimitas (T2-001).
+ *  P2 #21: domain separation daun vs node (`booth:merkle:node:`) anti second-preimage.
+ *  CATATAN KOMPATIBILITAS: pohon ini sha256 OFF-CHAIN — tidak kompatibel dengan
+ *  MerkleProof keccak/Solidity. Perubahan format di sini WAJIB dicerminkan di
+ *  apps/web/lib/zk.ts (buildMerkleTreeBrowser) agar root client ≡ server. */
 export function buildMerkleTree(leaves: string[]): {
   root: string;
   levels: string[][];
@@ -321,7 +376,9 @@ export function buildMerkleTree(leaves: string[]): {
     for (let i = 0; i < current.length; i += 2) {
       const left = current[i];
       const right = i + 1 < current.length ? current[i + 1] : left;
-      const combined = createHash('sha256').update(`${left}:${right}`).digest('hex');
+      const combined = createHash('sha256')
+        .update(`booth:merkle:node:${left}:${right}`)
+        .digest('hex');
       next.push(combined);
     }
     levels.push(next);
@@ -373,7 +430,8 @@ export function verifyMerkleProof(
     const sibling = path[i];
     const isRight = indices[i] === 1;
     const [l, r] = isRight ? [sibling, current] : [current, sibling];
-    current = createHash('sha256').update(`${l}:${r}`).digest('hex');
+    // P2 #21: format combine sama dengan buildMerkleTree (domain separation).
+    current = createHash('sha256').update(`booth:merkle:node:${l}:${r}`).digest('hex');
   }
   return current === expectedRoot;
 }

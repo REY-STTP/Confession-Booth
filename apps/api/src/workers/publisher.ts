@@ -44,7 +44,11 @@ interface PendingRow {
   transaction_hash: string | null;
   attempts: number;
   contract_address?: string | null;
+  storage_cid?: string | null;
 }
+
+// P2 #14: batas percobaan — selebihnya butuh intervensi manual (anti loop selamanya).
+const MAX_ATTEMPTS = 20;
 
 function rowsOf<T>(res: unknown): T[] {
   return (res as { rows: T[] }).rows ?? [];
@@ -81,12 +85,16 @@ export async function publisherTick(
       : sql``;
   const pending = rowsOf<PendingRow>(
     await db.execute(sql`
-      SELECT p.id, p.onchain_confession_id, p.content_hash, p.transaction_hash, p.attempts, p.contract_address
+      SELECT p.id, p.onchain_confession_id, p.content_hash, p.transaction_hash, p.attempts, p.contract_address,
+             co.storage_cid
       FROM publications p
+      LEFT JOIN confessions c ON c.id = p.confession_id
+      LEFT JOIN content_objects co ON co.id = c.content_object_id
       WHERE (
         (p.status IN ('PENDING_CHAIN', 'FAILED') AND (p.submitted_at IS NULL OR p.submitted_at < now() - interval '5 minutes'))
         OR (p.status = 'SUBMITTED' AND p.submitted_at < now() - interval '10 minutes')
       )
+        AND p.attempts < ${MAX_ATTEMPTS}
         ${scope}
       ORDER BY p.submitted_at NULLS FIRST LIMIT ${batch}
     `),
@@ -97,15 +105,6 @@ export async function publisherTick(
 
   const pub = publicClient(E);
   const wallet = walletClient(E, E.publisherKey);
-
-  // T1H-002: Nonce manager untuk menghindari stuck tx
-  let currentNonce: number | null = null;
-  async function getNextNonce(): Promise<number> {
-    if (currentNonce === null) {
-      currentNonce = await pub.getTransactionCount({ address: wallet.account.address });
-    }
-    return currentNonce++;
-  }
 
   for (const p of pending) {
     try {
@@ -127,7 +126,6 @@ export async function publisherTick(
           continue;
         }
 
-        const nonce = E.useNonceManager ? await getNextNonce() : undefined;
         const gasPriceConfig =
           E.maxFeePerGas || E.maxPriorityFeePerGas
             ? {
@@ -136,25 +134,44 @@ export async function publisherTick(
               }
             : undefined;
 
-        hash = await wallet.writeContract({
-          address: contractAddress,
-          abi: REGISTRY_ABI,
-          functionName: 'publish',
-          args: [
-            toBytes32(p.onchain_confession_id),
-            toBytes32(p.content_hash),
-            '',
-            PROTOCOL_VERSION,
-          ],
-          nonce,
-          ...gasPriceConfig,
+        // P2 #14: serialkan PENGIRIMAN antar replika via xact lock.
+        // - Aman PgBouncer (lock mati bersama tx, hold hanya selama send).
+        // - Nonce dibaca fresh (pending) di dalam lock → tak tabrakan.
+        // - Session-lock global disengaja TIDAK dipakai: hold ber-menit2
+        //   menyebabkan starvation + bocor via pool/pgbouncer.
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('booth-publisher-send'))`);
+          const nonce = E.useNonceManager
+            ? await pub.getTransactionCount({
+                address: wallet.account.address,
+                blockTag: 'pending',
+              })
+            : undefined;
+          const sent: Hex = await wallet.writeContract({
+            address: contractAddress,
+            abi: REGISTRY_ABI,
+            functionName: 'publish',
+            args: [
+              toBytes32(p.onchain_confession_id),
+              toBytes32(p.content_hash),
+              // P2 #14: CID on-chain bila ada (bukan '' selalu) — resolusi konten.
+              p.storage_cid ?? '',
+              PROTOCOL_VERSION,
+            ],
+            nonce,
+            ...gasPriceConfig,
+          });
+          hash = sent;
+          await tx.execute(sql`
+            UPDATE publications SET status = 'SUBMITTED', transaction_hash = ${sent},
+              submitted_at = now(), attempts = attempts + 1, failure_reason = NULL
+            WHERE id = ${p.id}::uuid
+          `);
         });
-        await db.execute(sql`
-          UPDATE publications SET status = 'SUBMITTED', transaction_hash = ${hash},
-            submitted_at = now(), attempts = attempts + 1, failure_reason = NULL
-          WHERE id = ${p.id}::uuid
-        `);
       }
+      // Defensif tak-terjangkau: cabang contractAddress-null sudah continue,
+      // cabang kirim selalu mengisi hash (gagal kirim → catch).
+      if (!hash) continue;
       const confirmations = E.confirmations ?? (E.chainId === 31337 ? 1 : 3);
       const receipt = await pub.waitForTransactionReceipt({
         hash,
@@ -173,7 +190,12 @@ export async function publisherTick(
       `);
       report.confirmed += 1;
     } catch (e) {
-      const msg = e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500);
+      const raw = e instanceof Error ? e.message : String(e);
+      // P2 #14: klasifikasikan error — DuplicateConfession (ID di-squat di kontrak
+      // lama/asing) tak akan pulih via retry: tandai jelas + hitung attempts agar
+      // mencapai cap dan berhenti (butuh intervensi manual).
+      const squatted = /DuplicateConfession/i.test(raw);
+      const msg = (squatted ? 'SQUATTED_ID: ' : '') + raw.slice(0, 480);
       await db.execute(sql`
         UPDATE publications SET status = 'FAILED', submitted_at = now(),
           attempts = attempts + 1, failure_reason = ${msg}

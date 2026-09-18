@@ -2,8 +2,17 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Users, Sparkles, ArrowRight, ShieldCheck, PenLine, BookOpen, Award } from 'lucide-react';
-import { getRooms, type RoomItem, BADGE_META } from '@/lib/booth';
+import {
+  Users,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  PenLine,
+  BookOpen,
+  Award,
+  AlertTriangle,
+} from 'lucide-react';
+import { getRooms, getLastFeedError, type RoomItem, BADGE_META } from '@/lib/booth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,11 +21,14 @@ import { RoomIcon, BadgeIcon } from '@/components/icon-helpers';
 export default function RoomsDirectoryPage() {
   const [rooms, setRooms] = React.useState<RoomItem[]>([]);
   const [loading, setLoading] = React.useState(true);
+  // P2 #17: banner offline jujur seperti feed.
+  const [offline, setOffline] = React.useState(false);
 
   React.useEffect(() => {
     getRooms()
       .then((data) => {
         setRooms(data);
+        setOffline(getLastFeedError()?.offline ?? false);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -52,6 +64,16 @@ export default function RoomsDirectoryPage() {
       </div>
 
       {/* Grid of Rooms */}
+      {/* P2 #17: banner offline jujur (fallback room statis). */}
+      {offline && !loading ? (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs sm:text-sm text-amber-200"
+        >
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" aria-hidden="true" />
+          <p>API unreachable — displaying local fallback cache.</p>
+        </div>
+      ) : null}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base sm:text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">

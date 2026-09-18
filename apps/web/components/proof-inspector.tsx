@@ -112,13 +112,36 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
   }, [isOpen, publicId, proof]);
 
   async function copyValue(key: string, val: string, label: string) {
+    // P2 #17: fallback non-secure context (clipboard API butuh HTTPS/localhost).
+    async function legacyCopy(text: string): Promise<boolean> {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch {
+        return false;
+      }
+    }
     try {
       await navigator.clipboard.writeText(val);
       setCopiedKey(key);
       toast.success(`${label} copied to clipboard`);
       setTimeout(() => setCopiedKey(null), 2000);
     } catch {
-      toast.error(`Failed to copy ${label}`);
+      if (await legacyCopy(val)) {
+        setCopiedKey(key);
+        toast.success(`${label} copied to clipboard`);
+        setTimeout(() => setCopiedKey(null), 2000);
+      } else {
+        toast.error(`Failed to copy ${label}`);
+      }
     }
   }
 

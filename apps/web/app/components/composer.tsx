@@ -33,6 +33,7 @@ import {
   type UserBadgeItem,
 } from '@/lib/booth';
 import { useSession, apiFetch } from '@/lib/session';
+import { solvePowBrowser, extractPowChallenge } from '@/lib/pow';
 import {
   deriveAnonymousIdentityBrowser,
   getMerkleProofBrowser,
@@ -111,30 +112,6 @@ export function ComposerForm() {
     setContent((content.slice(0, start) + text + content.slice(end)).slice(0, 500));
   }
 
-  async function solvePowBrowser(salt: string, difficulty: number): Promise<string | null> {
-    // T1H-005: Gunakan Web Worker untuk non-blocking PoW dengan timeout 30s
-    return new Promise<string | null>((resolve) => {
-      const worker = new Worker('/pow-worker.js');
-      const timeoutMs = 30000;
-      const timer = setTimeout(() => {
-        worker.terminate();
-        resolve(null);
-      }, timeoutMs + 1000);
-
-      worker.onmessage = (e) => {
-        clearTimeout(timer);
-        resolve(e.data.nonce);
-        worker.terminate();
-      };
-      worker.onerror = () => {
-        clearTimeout(timer);
-        resolve(null);
-        worker.terminate();
-      };
-      worker.postMessage({ salt, difficulty, timeoutMs });
-    });
-  }
-
   async function postConfession(idemKey: string, pow?: string) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -197,15 +174,21 @@ export function ComposerForm() {
 
         setZkStep('Verifying anonymous Merkle Tree pool…');
         // P1 #7: merkle-root kini paginasi — kumpulkan semua halaman.
+        // P2 #22: timeout per halaman (pool besar tak menggantung UI).
         async function fetchAllCommitments(): Promise<string[]> {
           const out: string[] = [];
           let offset: number | null = 0;
           let guard = 0;
           while (offset !== null && guard < 50) {
             guard += 1;
-            const r: Response = await fetch(
-              `${API_URL}/api/zk/merkle-root?limit=1000&offset=${offset}`,
-            );
+            let r: Response;
+            try {
+              r = await fetch(`${API_URL}/api/zk/merkle-root?limit=1000&offset=${offset}`, {
+                signal: AbortSignal.timeout(8000),
+              });
+            } catch {
+              throw new Error('Merkle pool fetch timed out. Check connection and retry.');
+            }
             if (!r.ok) throw new Error('Failed to reach ZK Merkle root endpoint.');
             const d: { commitments?: string[]; nextOffset?: number | null } = await r.json();
             out.push(...(d.commitments ?? []));
