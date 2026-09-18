@@ -74,12 +74,28 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
     setHashMatch(null);
 
     (async () => {
-      try {
+      // Skeleton-gantung: fetch tanpa timeout tak pernah selesai bila koneksi
+      // macet — batasi 10 dtk per request + 1x retry otomatis.
+      const load = async () => {
+        const timeout = { signal: AbortSignal.timeout(10000) };
         const [proofRes, detailRes] = await Promise.all([
-          fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}/proof`),
-          fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}`),
+          fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}/proof`, timeout),
+          fetch(`${API_URL}/api/confessions/${encodeURIComponent(publicId)}`, timeout),
         ]);
         if (!proofRes.ok) throw new Error(`Status ${proofRes.status}`);
+        return { proofRes, detailRes };
+      };
+      try {
+        let pair: { proofRes: Response; detailRes: Response };
+        try {
+          pair = await load();
+        } catch {
+          // Retry sekali setelah jeda singkat (glitch jaringan sesaat).
+          await new Promise((r) => setTimeout(r, 1500));
+          if (cancelled) return;
+          pair = await load();
+        }
+        const { proofRes, detailRes } = pair;
         const data = (await proofRes.json()) as ProofData;
         if (cancelled) return;
         setProof(data);
@@ -219,6 +235,18 @@ export function ProofInspector({ publicId, proofType, className }: ProofInspecto
               <p className="mt-1 text-[11px] opacity-70">
                 Confession remains safe and stored in the decentralized sanctuary.
               </p>
+              {/* Retry manual: memicu refetch via reset state. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setProof(null);
+                  setHashMatch(null);
+                }}
+                className="mt-2.5 inline-flex items-center rounded-full border border-border/70 px-3.5 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Retry
+              </button>
             </div>
           ) : proof ? (
             <div className="grid gap-3 text-xs">

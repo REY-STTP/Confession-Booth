@@ -242,7 +242,10 @@ export const confessionRoutes: FastifyPluginAsync = async (app) => {
       publicId,
       contentHash: row.content_hash,
       txHash: row.transaction_hash,
-      blockNumber: row.block_number,
+      // P2 follow-up: pg mengembalikan bigint sebagai string via query mentah —
+      // koersi eksplisit agar kontrak number|null terjaga (web menampilkan
+      // 'Invalid' untuk string numerik).
+      blockNumber: row.block_number === null ? null : Number(row.block_number),
       status: row.status ?? 'PENDING_CHAIN',
       contractAddress: expectedContract,
       chainId: String(row.chain_id ?? config.chainId),
