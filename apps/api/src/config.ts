@@ -31,7 +31,9 @@ if (isProd && !process.env.DATABASE_URL) {
 }
 
 // P1 #6: SESSION_SECRET fail-closed — pendek (<32) fatal di semua env,
-// karena dipakai untuk sesi + HMAC PoW. Default dev 33 char tetap lolos.
+// karena dipakai untuk sesi + HMAC PoW. Lazy (dievaluasi saat pertama diakses,
+// bukan saat import) agar entrypoint worker-only seperti publisher tidak
+// memicu assert/warning untuk secret yang tidak dipakainya.
 function assertSessionSecret(s: string): string {
   if (s.length < 32) {
     if (isProd) throw new Error('[booth-api] SESSION_SECRET min 32 chars di production');
@@ -57,12 +59,23 @@ function parseCorsOrigin(): string[] {
   return list;
 }
 
+let cachedSessionSecret: string | null = null;
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
-  sessionSecret: assertSessionSecret(
-    process.env.SESSION_SECRET ?? 'dev-only-change-me-min-32-chars',
-  ),
+  // Lazy getter + cache: entrypoint yang tak pernah memakai sesi (mis. worker
+  // publisher standalone) tidak menjalankan assert ini. Catatan: default dev
+  // 'dev-only-change-me-min-32-chars' panjangnya 31 char sehingga disengaja
+  // tetap memicu warning di dev (jangan pakai di prod).
+  get sessionSecret(): string {
+    if (cachedSessionSecret === null) {
+      cachedSessionSecret = assertSessionSecret(
+        process.env.SESSION_SECRET ?? 'dev-only-change-me-min-32-chars',
+      );
+    }
+    return cachedSessionSecret;
+  },
   appDomain: process.env.APP_DOMAIN ?? 'booth.local',
   appName: 'Confession Booth',
   chainId: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 11155111),
