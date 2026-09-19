@@ -13,7 +13,16 @@
 
 **Confession Booth** is a decentralized, privacy-first web application designed for honest, unburdened expression. It provides a dignified digital sanctuary for secrets, regrets, and unspoken thoughts without social comparison, follower graphs, or algorithmic tracking.
 
-The system uses **Zero-Knowledge (ZK) cryptography** and **Ethereum Sepolia on-chain anchoring** to guarantee cryptographic authenticity and tamper-resistance — while ensuring plaintext confessions never touch the blockchain and authors remain strictly unlinkable.
+The system uses **Ethereum Sepolia on-chain anchoring** to guarantee cryptographic authenticity and tamper-resistance — while ensuring plaintext confessions never touch the blockchain.
+
+> Status ZK (2026-09-19): **Zero-Knowledge Stealth ditunda (deferred) — nonaktif di prod.**
+> Implementasi saat ini adalah stub `SHA256` (Merkle + epoch nullifier, tanpa SNARK/circuit/verifier).
+> Jalur aktif adalah **Standard Anonymous** (sesi wallet). Rencana saat ZK dibuka
+> (belum dieksekusi): tombol ZK nonaktif + teaser `Segera hadir` (flag
+> `NEXT_PUBLIC_ZK_ENABLED` — flag ini belum ada di kode); backend tetap
+> `503 ZK_VERIFIER_UNAVAILABLE` bila `ZK_MOCK=false`. Catatan jujur: tombol ZK di
+> composer saat ini masih bisa diklik, tetapi percobaan publish ZK di prod akan
+> ditolak `503`.
 
 ---
 
@@ -27,9 +36,9 @@ The system uses **Zero-Knowledge (ZK) cryptography** and **Ethereum Sepolia on-c
    - Plaintext confessions are **never** stored on the blockchain.
    - Only cryptographic digests (`SHA-256 contentHash`), IPFS content identifiers (`CID`), timestamps, and policy versions are anchored to the Sepolia smart contract.
 
-3. **ZK Stealth & Unlinkable Publishing**
-   - In **ZK Stealth Mode**, membership proofs are generated locally inside the user's browser using Merkle Proofs and Epoch Nullifiers.
-   - The submission payload is dispatched to the backend API **without authentication headers or session tokens**, making it mathematically impossible for the database or server to correlate a confession with a wallet address.
+3. **ZK Stealth & Unlinkable Publishing (DEFERRED — nonaktif di prod)**
+   - Desain **ZK Stealth Mode**: membership proofs dibuat lokal di browser via Merkle Proofs dan Epoch Nullifiers, dikirim **tanpa auth header/session** sehingga DB tak bisa korelasikan confession ↔ wallet.
+   - Status 2026-09-19: stub `SHA256`, bukan Groth16 — klaim `mathematically impossible / strictly unlinkable` **belum berlaku**. Backend menolak proof ZK dengan `503` bila `ZK_MOCK=false`. Rencana UI (belum dieksekusi): tombol ZK disabled + teaser `Segera hadir` (`NEXT_PUBLIC_ZK_ENABLED`); sampai saat itu tombol masih aktif tetapi publish ZK prod → `503`.
 
 4. **Honest Privacy Boundaries**
    - We do not make false promises of magical anonymity. Network-level metadata, RPC endpoints, and distinct writing patterns can create correlation risks. The platform actively reminds authors not to include personally identifiable details.
@@ -60,7 +69,7 @@ The system uses **Zero-Knowledge (ZK) cryptography** and **Ethereum Sepolia on-c
   - `Empathetic Listener`: Community members who actively offer resonance and understanding.
   - `Midnight Soul`: Frequent nocturnal confessors in the midnight window.
   - `Chain Weaver`: Active participants in anonymous whisper threads.
-  - `Stealth Confessor`: Authors publishing via Zero-Knowledge stealth proofs.
+  - `Stealth Confessor`: (deferred — belum bisa diperoleh sampai ZK Groth16 mendarat) Authors publishing via Zero-Knowledge stealth proofs.
 - **Cryptographic Proof Inspector**: Interactive card component allowing visitors to verify SHA-256 canonical content digests, Sepolia block heights, and Etherscan transaction records.
 - **Transparent Moderation**: Audited, policy-based moderation workflow (<3 clicks to hide, triage, or dismiss violations) backed by immutable audit trails without revealing moderator identities.
 
@@ -69,14 +78,14 @@ The system uses **Zero-Knowledge (ZK) cryptography** and **Ethereum Sepolia on-c
 ## Monorepo Architecture
 
 ```text
-10-Confession-Booth/
+09-Confession-Booth/
 ├── apps/
 │   ├── web/               # Next.js 16 (App Router), Tailwind CSS, Lucide Icons, Radix UI, Sonner
 │   │   ├── app/           # Routes: feed, compose, confessions, rooms, trending, relatable, midnight, settings, guidelines, privacy, mod, admin
 │   │   ├── components/    # Reusable UI (CategoryPills, FeedTabs, ProofInspector, ReportDialog, ZkStepper, WhisperThread)
 │   │   ├── lib/           # Web client API helpers, session state provider, ZK browser proof generator
 │   │   └── e2e/           # Playwright end-to-end test suite
-│   └── api/               # Fastify backend, Drizzle ORM, Zod validation, EIP-712 auth, cryptographic workers
+│   └── api/               # Fastify backend, Drizzle ORM, Zod validation, personal_sign auth (SIWE-style, EIP-712 planned), cryptographic workers
 │       ├── src/           # API routes, services, middleware (PoW challenge, rate-limiting, error handler)
 │       └── scripts/       # DB migration scripts, seeder, confession reset utility
 ├── packages/
